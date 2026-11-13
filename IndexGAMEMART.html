@@ -263,7 +263,7 @@ function save() {
   const s = JSON.stringify(db);
   try { localStorage.setItem(KEY, s); } catch (e) { mem = s; }
   lastSaved = new Date();
-  $("saved").textContent = "Saved ✓ " + lastSaved.toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"});
+  if (GH.on()) queueSync(); else $("saved").textContent = "Saved locally ✓ " + lastSaved.toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"});
 }
 const S = () => db.settings;
 const P = id => db.parties.find(p => p.id === id);
@@ -835,7 +835,7 @@ function importFile(e) {
   };
   rd.readAsText(f);
 }
-function wipe() { if (confirm("Erase ALL data for this client? This cannot be undone.") && confirm("Really erase everything?")) { db = defaults(); save(); render(); } }
+function wipe() { if (confirm("Erase ALL data for this client" + (GH.on() ? " — including the copy on GitHub" : "") + "? This cannot be undone.") && confirm("Really erase everything?")) { db = defaults(); save(); render(); } }
 
 /* ---- Settings ---- */
 PAGES.settings = () => {
@@ -844,7 +844,7 @@ PAGES.settings = () => {
     title: "Settings", sub: "Business details printed on every invoice", noFy: true, actions: btn("Save settings", "saveSettings()", true),
     body: `<div class="panel"><h3>Business</h3><div class="grid">${fld("Business name", `<input id="s_biz" value="${esc(s.bizName)}">`)}${fld("GSTIN", `<input id="s_gstin" value="${esc(s.gstin)}" style="text-transform:uppercase">`)}${fld("PAN", `<input id="s_pan" value="${esc(s.pan)}">`)}${fld("State (for CGST/SGST vs IGST)", `<select id="s_state">${opts(STATES, s.state)}</select>`)}${fld("Phone", `<input id="s_phone" value="${esc(s.phone)}">`)}${fld("Email", `<input id="s_email" value="${esc(s.email)}">`)}${fld("Address", `<textarea id="s_addr">${esc(s.address)}</textarea>`, "full")}</div></div>
     <div class="panel"><h3>Bank & terms</h3><div class="grid">${fld("Bank name", `<input id="s_bank" value="${esc(s.bank)}">`)}${fld("Account number", `<input id="s_acc" value="${esc(s.acc)}">`)}${fld("IFSC", `<input id="s_ifsc" value="${esc(s.ifsc)}">`)}${fld("UPI ID", `<input id="s_upi" value="${esc(s.upi)}">`)}${fld("Invoice terms", `<textarea id="s_terms">${esc(s.terms)}</textarea>`, "full")}</div></div>
-    <div class="panel"><h3>Accounts</h3><div class="grid">${fld("Sales prefix", `<input id="s_sp" value="${esc(s.salePrefix)}">`)}${fld("Purchase prefix", `<input id="s_pp" value="${esc(s.purchPrefix)}">`)}${fld("Opening cash & bank balance (₹)", `<input type="number" step="any" id="s_oc" value="${s.openingCash}">`)}${fld("Lock PIN (leave empty for none)", `<input type="password" id="s_pin" value="${esc(s.pin)}" maxlength="8" autocomplete="new-password">`)}</div><p class="note" style="margin-top:12px">The PIN only hides the screen on a shared computer — it is not encryption.</p></div>`
+    <div class="panel"><h3>Accounts</h3><div class="grid">${fld("Sales prefix", `<input id="s_sp" value="${esc(s.salePrefix)}">`)}${fld("Purchase prefix", `<input id="s_pp" value="${esc(s.purchPrefix)}">`)}${fld("Opening cash & bank balance (₹)", `<input type="number" step="any" id="s_oc" value="${s.openingCash}">`)}${fld("Lock PIN (leave empty for none)", `<input type="password" id="s_pin" value="${esc(s.pin)}" maxlength="8" autocomplete="new-password">`)}</div><p class="note" style="margin-top:12px">The PIN only hides the screen on a shared computer — it is not encryption.</p></div>${ghPanel()}`
   };
 };
 function saveSettings() {
@@ -866,11 +866,114 @@ function showLock() {
 }
 function tryPin() { if ($("pinin").value === S().pin) $("lockscr").remove(); else { toast("Wrong PIN"); $("pinin").value = ""; } }
 
+/* ---------------- GitHub live sync ---------------- */
+const GH = {k: KEY + "_gh", cfg: null, sha: null, busy: false, dirty: false, pending: false, timer: null,
+  load() { try { this.cfg = JSON.parse(localStorage.getItem(this.k)) || null; } catch (e) { this.cfg = null; } return this.cfg; },
+  store() { try { if (this.cfg) localStorage.setItem(this.k, JSON.stringify(Object.assign(this.cfg, {sha: this.sha, pending: this.pending}))); else localStorage.removeItem(this.k); } catch (e) {} },
+  on() { return !!(this.cfg && this.cfg.token && this.cfg.owner && this.cfg.repo); },
+  url() { const c = this.cfg; return `https://api.github.com/repos/${c.owner}/${c.repo}/contents/${c.path || "data.json"}`; },
+  h() { return {Authorization: "Bearer " + this.cfg.token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}; }
+};
+const b64 = s => btoa(unescape(encodeURIComponent(s)));
+const unb64 = s => decodeURIComponent(escape(atob(s.replace(/\s/g, ""))));
+const clock = () => new Date().toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"});
+function ghStatus(m, bad) { $("saved").textContent = m; $("saved").style.color = bad ? "var(--bad)" : ""; }
+async function ghGet() {
+  const u = GH.url() + "?ref=" + encodeURIComponent(GH.cfg.branch || "main") + "&t=" + Date.now();
+  const r = await fetch(u, {headers: GH.h(), cache: "no-store"});
+  if (r.status === 404) return {missing: true};
+  if (!r.ok) throw new Error("GitHub " + r.status + (r.status === 401 ? " (check token)" : r.status === 403 ? " (token lacks access)" : ""));
+  const j = await r.json();
+  let text;
+  if (j.content) text = unb64(j.content);
+  else text = await (await fetch(u, {headers: Object.assign(GH.h(), {Accept: "application/vnd.github.raw+json"}), cache: "no-store"})).text();
+  return {sha: j.sha, data: JSON.parse(text)};
+}
+function applyRemote(g) {
+  db = Object.assign(defaults(), g.data); GH.sha = g.sha; GH.pending = false; GH.store();
+  try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { mem = JSON.stringify(db); }
+  render(); ghStatus("Synced to GitHub ✓ " + clock());
+}
+function queueSync() {
+  if (!GH.on()) return;
+  GH.pending = true; GH.store(); ghStatus("Saving…");
+  clearTimeout(GH.timer); GH.timer = setTimeout(ghPush, 1200);
+}
+async function ghPush() {
+  if (!GH.on()) return false;
+  if (GH.busy) { GH.dirty = true; return false; }
+  GH.busy = true; GH.dirty = false; ghStatus("Syncing to GitHub…");
+  let ok = false;
+  try {
+    const body = {message: "Update " + CLIENT_NAME + " data " + new Date().toISOString(), content: b64(JSON.stringify(db)), branch: GH.cfg.branch || "main"};
+    if (GH.sha) body.sha = GH.sha;
+    const r = await fetch(GH.url(), {method: "PUT", headers: Object.assign({"Content-Type": "application/json"}, GH.h()), body: JSON.stringify(body)});
+    if (r.status === 409 || r.status === 422) {
+      const g = await ghGet();
+      if (g.missing) { GH.sha = null; GH.dirty = true; }
+      else if (confirm("Another device saved newer data to GitHub.\n\nOK = load their version here (changes made here since the last sync are lost).\nCancel = overwrite GitHub with this device's data.")) applyRemote(g);
+      else { GH.sha = g.sha; GH.dirty = true; }
+    } else {
+      if (!r.ok) throw new Error("GitHub " + r.status + (r.status === 401 ? " (check token)" : r.status === 403 || r.status === 404 ? " (token needs Contents: read & write on the data repo)" : ""));
+      const j = await r.json(); GH.sha = j.content.sha; GH.pending = false; GH.store(); ok = true;
+      ghStatus("Synced to GitHub ✓ " + clock());
+    }
+  } catch (e) { ghStatus("Sync failed: " + e.message, true); }
+  GH.busy = false;
+  if (GH.dirty) return ghPush();
+  return ok;
+}
+async function ghPull(manual) {
+  if (!GH.on() || GH.busy || GH.pending) return;
+  try {
+    const g = await ghGet();
+    if (g.missing) { await ghPush(); return; }
+    if (g.sha !== GH.sha) { applyRemote(g); if (manual) toast("Loaded latest from GitHub"); }
+    else { ghStatus("Synced to GitHub ✓ " + clock()); if (manual) toast("Already up to date"); }
+  } catch (e) { ghStatus("Sync failed: " + e.message, true); }
+}
+async function ghConnect() {
+  const prev = GH.cfg;
+  const cfg = {owner: val("g_owner"), repo: val("g_repo"), branch: val("g_branch") || "main", path: val("g_path") || "data.json", token: val("g_token") || (prev && prev.token) || ""};
+  if (!cfg.owner || !cfg.repo || !cfg.token) return toast("Enter owner, repository and token");
+  GH.cfg = cfg; GH.sha = null; GH.pending = false; ghStatus("Connecting…");
+  try {
+    const g = await ghGet();
+    if (g.missing) {
+      if (!(await ghPush())) throw new Error("could not write — token needs Contents: read & write");
+    } else {
+      const local = db.sales.length + db.purchases.length + db.receipts.length + db.payments.length + db.entries.length + db.items.length + db.parties.length > 2;
+      if (local && !confirm("GitHub already has saved data.\n\nOK = load GitHub's data here (replaces this browser's data).\nCancel = overwrite GitHub with this browser's data.")) { GH.sha = g.sha; if (!(await ghPush())) throw new Error("could not write — token needs Contents: read & write"); }
+      else applyRemote(g);
+    }
+    GH.store(); toast("Connected to GitHub"); render();
+    if (!GH.poll) { GH.poll = true; setInterval(() => { if (!$("layer").innerHTML) ghPull(); }, 45000); }
+  } catch (e) { GH.cfg = prev; ghStatus("Sync failed: " + e.message, true); toast("Could not connect: " + e.message); }
+}
+function ghDisconnect() {
+  if (!confirm("Disconnect GitHub sync on this device? Your data stays here and on GitHub.")) return;
+  GH.cfg = null; GH.store(); $("saved").style.color = ""; $("saved").textContent = "Consultancy"; render(); toast("Disconnected");
+}
+function ghPanel() {
+  const c = GH.cfg || {};
+  return `<div class="panel"><h3>GitHub live sync ${GH.on() ? '<span class="pill">Connected</span>' : ""}</h3><p class="note" style="margin-bottom:14px">Every change is saved to a <b>private</b> GitHub repository and loaded on every device that connects. Create a fine-grained token (GitHub → Settings → Developer settings → Fine-grained tokens) limited to that one repository with <b>Contents: Read and write</b>. The token stays only in this browser and is never saved in the data or backups.</p><div class="grid">${fld("Owner / username", `<input id="g_owner" value="${esc(c.owner || "")}" placeholder="github-username">`)}${fld("Data repository (private)", `<input id="g_repo" value="${esc(c.repo || "")}" placeholder="GAMEMART-data">`)}${fld("Branch", `<input id="g_branch" value="${esc(c.branch || "main")}">`)}${fld("File path", `<input id="g_path" value="${esc(c.path || "data.json")}">`)}${fld("Access token", `<input type="password" id="g_token" autocomplete="new-password" placeholder="${GH.on() ? "saved on this device — leave blank to keep" : "github_pat_…"}">`, "full")}</div><div class="acts" style="margin-top:14px">${btn(GH.on() ? "Update connection" : "Connect & sync", "ghConnect()", true)}${GH.on() ? btn("Sync now", "ghPull(true)") + btn("Disconnect", "ghDisconnect()") : ""}</div></div>`;
+}
+async function initSync() {
+  GH.load(); if (!GH.on()) return;
+  GH.sha = GH.cfg.sha || null; GH.pending = !!GH.cfg.pending;
+  if (GH.pending) await ghPush(); else await ghPull();
+  if (S().pin && !$("lockscr")) showLock();
+  GH.poll = true; setInterval(() => { if (!$("layer").innerHTML) ghPull(); }, 45000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && !$("layer").innerHTML) ghPull(); });
+}
+window.addEventListener("beforeunload", e => { if (GH.on() && GH.pending) { e.preventDefault(); e.returnValue = ""; } });
+
 /* ---------------- boot ---------------- */
 document.addEventListener("keydown", e => { if (e.key === "Escape" && $("layer").innerHTML) closeModal(); });
 $("saved").textContent = "Consultancy";
 render();
 if (S().pin) showLock();
+initSync();
 </script>
 </body>
 </html>
