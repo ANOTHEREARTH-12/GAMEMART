@@ -80,7 +80,7 @@ td b{font-weight:700}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
 .grid .full{grid-column:1/-1}
 label{display:block;font-size:12px;font-weight:600;color:var(--mut);margin:0 0 6px 3px;letter-spacing:.03em}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}.two>.panel{min-width:0}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
 .tab{padding:9px 16px;border-radius:999px;border:1px solid var(--line);cursor:pointer;font-weight:600;color:var(--mut)}
 .tab.on{background:#f5f5f7;color:#0b0b0c;border-color:#fff}
@@ -139,6 +139,8 @@ label{display:block;font-size:12px;font-weight:600;color:var(--mut);margin:0 0 6
 .paper .sum .t div.g{border-top:2px solid #111;font-weight:800;font-size:15px;margin-top:4px;padding-top:6px}
 .paper .pf{margin-top:22px;padding-top:8px;border-top:1px solid #ccc;text-align:center;color:#777;font-size:10.5px}
 .pdfhost .paper{border-radius:0;padding:36px 40px}
+.paper .stp{display:inline-block;margin-top:6px;padding:2px 10px;border:2px solid;border-radius:6px;font-weight:800;font-size:12px;letter-spacing:1px}
+body[data-lv="0"] .act a.ed,body[data-lv="1"] .act a.ed,body[data-lv="0"] .act a.del,body[data-lv="1"] .act a.del,body[data-lv="2"] .act a.del{display:none}
 #print{display:none}
 @media print{
  body:before{display:none}html,body{background:#fff!important}
@@ -205,7 +207,7 @@ const ICON = {
 const svg = k => `<svg viewBox="0 0 24 24">${ICON[k]}</svg>`;
 const NAV = [
  ["WORKSPACE",[["dashboard","Dashboard","dash"],["sales","Sales","sales"],["purchases","Purchases","purch"],["receipts","Receipts","rec"],["payments","Payments","pay"],["entries","Expenses & Others","exp"],["parties","Parties","users"],["items","Items","box"]]],
- ["REPORTS",[["gst","GST Reports","gst"],["pnl","Profit & Loss","pl"],["bs","Balance Sheet","bs"]]],
+ ["REPORTS",[["outstanding","Outstanding & Ageing","rec"],["cashbook","Cash Book","pay"],["gst","GST Reports","gst"],["pnl","Profit & Loss","pl"],["bs","Balance Sheet","bs"]]],
  ["DATA",[["backup","Import / Backup","db"],["settings","Settings","set"],["__lock","Lock","lock"]]]
 ];
 
@@ -252,7 +254,7 @@ function defaults() {
       {id: "p_cash_c", name: "Cash Customer", gstin: "", state: "", phone: "", email: "", address: "", openType: "Dr", openAmt: 0},
       {id: "p_cash_s", name: "Cash Supplier", gstin: "", state: "", phone: "", email: "", address: "", openType: "Dr", openAmt: 0}
     ],
-    items: [], sales: [], purchases: [], receipts: [], payments: [], entries: []
+    items: [], sales: [], purchases: [], receipts: [], payments: [], entries: [], users: []
   };
 }
 function load() {
@@ -384,21 +386,26 @@ function nextVNo(kind) {
 let page = "dashboard", Q = {}, R = null, CUR = null, gstTab = "gstr1", MSAVE = null, DR = null;
 function setPage(p) {
   if (p === "__lock") return lockApp();
+  if (!pageOk(p)) return deny();
   page = p; Q = {}; $("side").classList.remove("open"); render(); window.scrollTo(0, 0);
 }
 function navHtml() {
-  return NAV.map(([g, items]) => `<div class="grp">${g}</div>` + items.map(([k, l, i]) =>
-    `<div class="ni ${k === page ? "on" : ""}" onclick="setPage('${k}')"><span class="ic">${svg(i)}</span>${l}</div>`).join("")).join("");
+  return NAV.map(([g, items]) => { const it = items.filter(([k]) => pageOk(k)); return it.length ? `<div class="grp">${g}</div>` + it.map(([k, l, i]) =>
+    `<div class="ni ${k === page ? "on" : ""}" onclick="setPage('${k}')"><span class="ic">${svg(i)}</span>${l}</div>`).join("") : ""; }).join("") +
+    (multi() && CU ? `<div class="note" style="padding:12px 14px">Signed in: <b>${esc(CU.name)}</b>${CU.owner ? " (owner)" : ""}</div>` : "");
 }
 const btn = (l, f, pri) => `<button class="btn ${pri ? "pri" : ""}" onclick="${f}">${l}</button>`;
 function render() {
+  if (multi() && !CU) { $("nav").innerHTML = ""; $("main").innerHTML = ""; return; }
+  if (!pageOk(page)) page = firstPage();
+  document.body.dataset.lv = pageLv();
   $("nav").innerHTML = navHtml();
   $("brandName").textContent = S().bizName || CLIENT_NAME;
   $("logo").textContent = (S().bizName || CLIENT_NAME).replace(/[^A-Za-z0-9 ]/g, "").split(" ").map(w => w[0]).join("").slice(0, 3).toUpperCase();
   document.title = (S().bizName || CLIENT_NAME) + " · Billing & Accounts";
   CUR = null;
   const p = PAGES[page]();
-  $("main").innerHTML = `<button class="mbtn" onclick="$('side').classList.toggle('open')">☰</button><div class="top"><div><h1>${p.title}</h1><p class="sub">${p.sub || ""}</p></div><div class="acts">${p.noFy ? "" : fySelect()}${p.actions || ""}</div></div>${p.body}`;
+  $("main").innerHTML = `<button class="mbtn" onclick="$('side').classList.toggle('open')">☰</button><div class="top"><div><h1>${p.title}</h1><p class="sub">${p.sub || ""}</p></div><div class="acts">${p.noFy ? "" : fySelect()}${actionsOk() ? (p.actions || "") : ""}</div></div>${p.body}`;
   if (CUR) refreshRows();
   if (p.after) p.after();
 }
@@ -444,7 +451,7 @@ PAGES.dashboard = () => {
     actions: btn("+ New Sale", "docForm('sales')", true),
     body: `<div class="stats">${statCard("Sales (excl. GST)", inr(st), s.length + " invoices")}${statCard("Purchases (excl. GST)", inr(pt), pu.length + " bills")}${statCard("To Receive", inr(rec))}${statCard("To Pay", inr(pay))}</div>
     <div class="stats">${statCard("Cash & Bank", inr(bs.cash))}${statCard("Net GST " + (bs.gstNet >= 0 ? "Payable" : "Credit"), inr(Math.abs(bs.gstNet)))}${statCard("Stock Value", inr(bs.stock))}${statCard("Net Profit (FY)", inr(pl.net))}</div>
-    <div class="panel"><h3>Monthly trend</h3><div class="bars">${months.map(m => `<div class="c"><div class="pair"><div class="bar" style="height:${m.s / mx * 100}%" title="Sales ${inr(m.s)}"></div><div class="bar p" style="height:${m.p / mx * 100}%" title="Purchases ${inr(m.p)}"></div></div><small>${m.l}</small></div>`).join("")}</div><div class="legend"><span><i></i>Sales</span><span><i class="p"></i>Purchases</span></div></div>
+    ${dashExtra()}<div class="panel"><h3>Monthly trend</h3><div class="bars">${months.map(m => `<div class="c"><div class="pair"><div class="bar" style="height:${m.s / mx * 100}%" title="Sales ${inr(m.s)}"></div><div class="bar p" style="height:${m.p / mx * 100}%" title="Purchases ${inr(m.p)}"></div></div><small>${m.l}</small></div>`).join("")}</div><div class="legend"><span><i></i>Sales</span><span><i class="p"></i>Purchases</span></div></div>
     <div class="two"><div class="panel"><h3>Recent transactions</h3><div class="tw"><table><tbody>${recent.length ? recent.map(x => `<tr><td><b>${esc(x.d.no)}</b><small>${esc(pname(x.d.partyId))} · ${fdate(x.d.date)}</small></td><td><span class="pill">${x.t}</span></td><td class="r"><b>${inr(docCalc(x.d).total)}</b></td></tr>`).join("") : `<tr><td class="empty">No transactions in this year</td></tr>`}</tbody></table></div></div>
     <div class="panel"><h3>Outstanding balances</h3><div class="tw"><table><tbody>${top.length ? top.map(x => `<tr><td><b>${esc(x.p.name)}</b></td><td class="r">${balTxt(x.b)}</td></tr>`).join("") : `<tr><td class="empty">All settled</td></tr>`}</tbody></table></div></div></div>`
   };
@@ -455,14 +462,14 @@ function docPage(kind) {
   const isS = kind === "sales", [a, b] = fyRange();
   const all = db[kind].filter(d => inR(d.date, a, b));
   const cs = all.map(docCalc);
-  CUR = () => all.slice().sort((x, y) => y.date.localeCompare(x.date) || y.no.localeCompare(x.no))
-    .filter(d => (!Q.party || d.partyId === Q.party) && match(d.no, pname(d.partyId), d.billNo || ""))
-    .map(d => { const c = docCalc(d); return `<tr><td><b>${esc(d.no)}</b>${d.billNo ? `<small>Supplier bill: ${esc(d.billNo)}</small>` : ""}</td><td>${fdate(d.date)}</td><td>${esc(pname(d.partyId))}<small>${esc(d.pos || "")}</small></td><td class="r">${inr(c.taxable)}</td><td class="r">${inr(c.tax)}</td><td class="r"><b>${inr(c.total)}</b></td><td class="act"><a onclick="viewDoc('${kind}','${d.id}')">Open</a><a onclick="docForm('${kind}','${d.id}')">Edit</a><a class="del" onclick="delItem('${kind}','${d.id}')">Delete</a></td></tr>`; }).join("");
+  CUR = () => { const AL = allocAll(); return all.slice().sort((x, y) => y.date.localeCompare(x.date) || y.no.localeCompare(x.no))
+    .filter(d => (!Q.party || d.partyId === Q.party) && (!Q.st || payStat(AL.inv[d.id]) === Q.st) && match(d.no, pname(d.partyId), d.billNo || ""))
+    .map(d => { const c = docCalc(d), st = payStat(AL.inv[d.id]); return `<tr><td><b>${esc(d.no)}</b>${d.billNo ? `<small>Supplier bill: ${esc(d.billNo)}</small>` : ""}${byTag(d)}</td><td>${fdate(d.date)}</td><td>${esc(pname(d.partyId))}<small>${esc(d.pos || "")}</small></td><td class="r">${inr(c.taxable)}</td><td class="r">${inr(c.tax)}</td><td class="r"><b>${inr(c.total)}</b></td><td>${statPill(st)}${st === "Part paid" ? `<small>due ${inr(AL.inv[d.id].due)}</small>` : ""}</td><td class="act"><a onclick="viewDoc('${kind}','${d.id}')">Open</a><a class="ed" onclick="docForm('${kind}','${d.id}')">Edit</a><a class="del" onclick="delItem('${kind}','${d.id}')">Delete</a></td></tr>`; }).join(""); };
   return {
     title: isS ? "Sales" : "Purchases", sub: isS ? "Create GST invoices, print them and share on WhatsApp" : "Record supplier bills and claim input tax credit",
     actions: btn(isS ? "+ New Invoice" : "+ New Bill", `docForm('${kind}')`, true),
     body: `<div class="stats">${statCard(isS ? "Invoices" : "Bills", all.length)}${statCard("Taxable Value", inr(sum(cs, c => c.taxable)))}${statCard(isS ? "GST Collected" : "Input Tax Credit", inr(sum(cs, c => c.tax)))}${statCard("Total", inr(sum(cs, c => c.total)))}</div>` +
-      listPanel(["No.", "Date", "Party", ["Taxable", "r"], ["GST", "r"], ["Total", "r"], ""], partyFilter(), "Search by number or party…")
+      listPanel(["No.", "Date", "Party", ["Taxable", "r"], ["GST", "r"], ["Total", "r"], "Status", ""], partyFilter() + `<select onchange="Q.st=this.value;refreshRows()"><option value="">Any status</option>${["Unpaid", "Part paid", "Paid"].map(x => `<option ${Q.st === x ? "selected" : ""}>${x}</option>`).join("")}</select>`, "Search by number or party…")
   };
 }
 PAGES.sales = () => docPage("sales");
@@ -470,11 +477,13 @@ PAGES.purchases = () => docPage("purchases");
 
 const blankLine = () => ({itemId: "", desc: "", hsn: "", unit: "", qty: 1, rate: 0, disc: 0, dm: "amt", gst: 18});
 function docForm(kind, id) {
+  if (!ck(kind, 2)) return;
   const isS = kind === "sales", ex = id && db[kind].find(x => x.id === id);
   DR = {kind, d: ex ? JSON.parse(JSON.stringify(ex)) : {id: uid(), no: nextNo(kind), date: defDate(), partyId: isS ? "p_cash_c" : "p_cash_s", pos: "", lines: [blankLine()], notes: "", billNo: ""}};
   if (!DR.d.pos) DR.d.pos = (P(DR.d.partyId) || {}).state || S().state;
   DR.d.lines.forEach(l => { if (l.dm !== "amt") { l.disc = r2(num(l.qty) * num(l.rate) * num(l.disc) / 100); l.dm = "amt"; } });
-  const d = DR.d;
+  const d = DR.d, vk = isS ? "receipts" : "payments", lk = ex && db[vk].find(r => r.invId === ex.id);
+  DR.pay = lk ? {on: true, id: lk.id, no: lk.no, amount: lk.amount, mode: lk.mode, ref: lk.ref, auto: false} : {on: false, no: "", amount: "", mode: "Cash", ref: "", auto: true};
   const body = `<div class="grid">
    ${fld(isS ? "Invoice No." : "Our Ref. No.", `<input id="f_no" value="${esc(d.no)}" oninput="DR.d.no=this.value">`)}
    ${fld("Date", `<input type="date" id="f_date" value="${d.date}" oninput="DR.d.date=this.value">`)}
@@ -485,9 +494,23 @@ function docForm(kind, id) {
   <div class="lines tw" style="margin-top:16px"><table><thead><tr>${heads(["Item", "Description", "HSN/SAC", "Qty", "Rate (excl. GST)", "Disc (₹)", "GST %", ["Amount", "r"], ""])}</tr></thead><tbody id="lb"></tbody></table></div>
   <div style="margin-top:8px">${btn("+ Add line", "addLine()")}</div>
   <div class="grid" style="margin-top:14px">${fld("Notes (shown on document)", `<textarea oninput="DR.d.notes=this.value">${esc(d.notes)}</textarea>`, "full")}</div>
-  <div class="tot" id="tot"></div>`;
+  <div class="tot" id="tot"></div>
+  <div class="panel" style="margin-top:16px;padding:16px"><label style="display:flex;gap:10px;align-items:center;cursor:pointer;margin:0"><input type="checkbox" id="pay_on" style="width:20px;height:20px;padding:0" ${DR.pay.on ? "checked" : ""} onchange="payToggle(this.checked)"><b>${isS ? "Payment received now — auto-create receipt" : "Payment made now — auto-create payment voucher"}</b></label><div id="pay_f"></div></div>`;
   openModal((ex ? "Edit " : "New ") + (isS ? "Sales Invoice" : "Purchase Bill"), body, "Save", saveDoc);
-  drawLines(); updTot();
+  drawLines(); payDraw(); updTot();
+}
+function payDraw() {
+  const P0 = DR.pay, isS = DR.kind === "sales", vk = isS ? "receipts" : "payments";
+  if (!P0.on) { $("pay_f").innerHTML = ""; return; }
+  if (!P0.no) P0.no = nextVNo(vk);
+  $("pay_f").innerHTML = `<div class="grid" style="margin-top:14px">${fld(isS ? "Receipt No." : "Voucher No.", `<input value="${esc(P0.no)}" oninput="DR.pay.no=this.value">`)}${fld("Amount (₹)", `<input type="number" step="any" id="pay_amt" value="${P0.amount}" oninput="DR.pay.amount=num(this.value);DR.pay.auto=false;payHint()">`)}${fld("Mode", `<select onchange="DR.pay.mode=this.value">${opts(MODES, P0.mode)}</select>`)}${fld("Reference / Txn ID", `<input value="${esc(P0.ref)}" oninput="DR.pay.ref=this.value">`)}</div><p class="note" id="pay_h" style="margin-top:10px"></p>`;
+  payHint();
+}
+function payToggle(on) { DR.pay.on = on; if (on && DR.pay.auto) DR.pay.amount = docCalc(DR.d).total; payDraw(); }
+function payHint() {
+  const h = $("pay_h"); if (!h) return;
+  const t = docCalc(DR.d).total, a = num(DR.pay.amount), rest = r2(t - a);
+  h.innerHTML = a <= 0 ? "Enter the amount received." : Math.abs(rest) < 0.5 ? "✔ Full payment — invoice will be fully settled." : rest > 0 ? `Part payment — <b>${inr(rest)}</b> will remain due from the party.` : `<span class="cr">Amount is ${inr(-rest)} more than the invoice total.</span>`;
 }
 function docParty(id) { DR.d.partyId = id; DR.d.pos = (P(id) || {}).state || S().state; $("f_pos").value = DR.d.pos; updTot(); }
 function drawLines() {
@@ -517,6 +540,7 @@ function updTot() {
   $("tot").innerHTML = `<div><span>Taxable value</span><span>${inr(c.taxable)}</span></div>` +
     (c.intra ? `<div><span>CGST</span><span>${inr(c.cgst)}</span></div><div><span>SGST</span><span>${inr(c.sgst)}</span></div>` : `<div><span>IGST</span><span>${inr(c.igst)}</span></div>`) +
     `<div><span>Round off</span><span>${inr(c.round)}</span></div><div class="g"><span>Total</span><span>${inr(c.total)}</span></div><div style="font-size:12px;color:var(--mut)">${words(c.total)} Rupees Only</div>`;
+  if (DR.pay && DR.pay.on) { if (DR.pay.auto) { DR.pay.amount = c.total; const e = $("pay_amt"); if (e) e.value = c.total; } payHint(); }
 }
 function saveDoc() {
   const d = DR.d, kind = DR.kind;
@@ -525,29 +549,45 @@ function saveDoc() {
   d.lines = d.lines.filter(l => num(l.qty) * num(l.rate) > 0);
   if (!d.lines.length) return toast("Add at least one line with qty and rate");
   if (db[kind].some(x => x.no === d.no && x.id !== d.id)) return toast("That number already exists");
+  const vk = kind === "sales" ? "receipts" : "payments", pay = DR.pay, tot = docCalc(d).total;
+  if (pay && pay.on) {
+    if (num(pay.amount) <= 0) return toast("Enter the payment amount or untick the box");
+    if (num(pay.amount) > tot + 0.5) return toast("Payment is more than the invoice total");
+    if (!String(pay.no).trim()) return toast("Enter the receipt number");
+    if (db[vk].some(x => x.no === pay.no && x.id !== pay.id)) return toast("That receipt number already exists");
+  }
+  if (!d.by && CU) d.by = CU.name;
   const i = db[kind].findIndex(x => x.id === d.id);
   if (i >= 0) db[kind][i] = d; else db[kind].push(d);
-  save(); closeModal(); render(); toast("Saved");
+  const old = db[vk].find(r => r.invId === d.id);
+  if (pay && pay.on) {
+    const v = {id: old ? old.id : uid(), no: pay.no.trim(), date: d.date, partyId: d.partyId, amount: r2(num(pay.amount)), mode: pay.mode, ref: pay.ref, note: "Against " + d.no, invId: d.id, by: old && old.by ? old.by : (CU ? CU.name : "")};
+    if (old) db[vk][db[vk].indexOf(old)] = v; else db[vk].push(v);
+  } else if (old) db[vk] = db[vk].filter(r => r !== old);
+  save(); closeModal(); render(); toast(pay && pay.on ? "Saved with " + (kind === "sales" ? "receipt " : "payment ") + pay.no : "Saved");
 }
 function delItem(kind, id) {
-  if (!confirm("Delete this record permanently?")) return;
-  db[kind] = db[kind].filter(x => x.id !== id); save(); render();
+  if (!ck(kind, 3)) return;
+  const vk = kind === "sales" ? "receipts" : kind === "purchases" ? "payments" : null, lk = vk && db[vk].filter(r => r.invId === id);
+  if (!confirm("Delete this record permanently?" + (lk && lk.length ? "\n\nThe linked " + (kind === "sales" ? "receipt " : "payment ") + lk.map(r => r.no).join(", ") + " will be deleted too." : ""))) return;
+  db[kind] = db[kind].filter(x => x.id !== id); if (lk && lk.length) db[vk] = db[vk].filter(r => r.invId !== id); save(); render();
 }
 
 /* ---- View / print ---- */
 function paperHtml(kind, d) {
-  const isS = kind === "sales", c = docCalc(d), p = P(d.partyId) || {}, s = S();
-  return `<div class="paper"><div class="hd"><div><h2>${esc(s.bizName)}</h2><div>${esc(s.address).replace(/\n/g, "<br>")}</div><div>${s.phone ? "Ph: " + esc(s.phone) : ""} ${s.email ? " · " + esc(s.email) : ""}</div><div>${s.gstin ? "<b>GSTIN:</b> " + esc(s.gstin) : ""} ${s.pan ? " · <b>PAN:</b> " + esc(s.pan) : ""}</div></div><div><div class="ttl">${isS ? "TAX INVOICE" : "PURCHASE BILL"}</div><div style="text-align:right;margin-top:8px"><b>No:</b> ${esc(d.no)}<br><b>Date:</b> ${fdate(d.date)}${d.billNo ? `<br><b>Supplier Bill:</b> ${esc(d.billNo)}` : ""}</div></div></div>
+  const isS = kind === "sales", c = docCalc(d), p = P(d.partyId) || {}, s = S(), al = allocAll().inv[d.id] || {total: c.total, paid: 0, due: c.total}, st = payStat(al);
+  return `<div class="paper"><div class="hd"><div><h2>${esc(s.bizName)}</h2><div>${esc(s.address).replace(/\n/g, "<br>")}</div><div>${s.phone ? "Ph: " + esc(s.phone) : ""} ${s.email ? " · " + esc(s.email) : ""}</div><div>${s.gstin ? "<b>GSTIN:</b> " + esc(s.gstin) : ""} ${s.pan ? " · <b>PAN:</b> " + esc(s.pan) : ""}</div></div><div><div class="ttl">${isS ? "TAX INVOICE" : "PURCHASE BILL"}</div><div style="text-align:right"><span class="stp" style="color:${st === "Paid" ? "#1a7f37" : st === "Part paid" ? "#b45309" : "#b91c1c"}">${st.toUpperCase()}</span></div><div style="text-align:right;margin-top:8px"><b>No:</b> ${esc(d.no)}<br><b>Date:</b> ${fdate(d.date)}${d.billNo ? `<br><b>Supplier Bill:</b> ${esc(d.billNo)}` : ""}</div></div></div>
   <div class="meta"><div class="box"><h5>${isS ? "Bill To" : "Supplier"}</h5><b>${esc(p.name)}</b><br>${esc(p.address || "").replace(/\n/g, "<br>")}${p.gstin ? "<br>GSTIN: " + esc(p.gstin) : ""}${p.phone ? "<br>Ph: " + esc(p.phone) : ""}</div><div class="box"><h5>Place of Supply</h5><b>${esc(d.pos)}</b><br>${c.intra ? "Intra-state (CGST + SGST)" : "Inter-state (IGST)"}</div></div>
   <table><thead><tr><th>#</th><th style="text-align:left">Description</th><th>HSN/SAC</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Disc (₹)</th><th class="r">Taxable</th><th class="r">GST%</th><th class="r">Amount</th></tr></thead><tbody>${c.lines.map((l, i) => `<tr><td>${i + 1}</td><td>${esc(l.desc)}</td><td>${esc(l.hsn)}</td><td class="r">${l.qty}${l.unit ? " " + esc(l.unit) : ""}</td><td class="r">${inr(l.rate)}</td><td class="r">${l.discAmt ? inr(l.discAmt) : "—"}</td><td class="r">${inr(l.taxable)}</td><td class="r">${l.gst}%</td><td class="r">${inr(l.amount)}</td></tr>`).join("")}</tbody></table>
-  <div class="sum"><div style="flex:1"><b>Amount in words:</b><br>${words(c.total)} Rupees Only${d.notes ? `<br><br><b>Notes:</b><br>${esc(d.notes).replace(/\n/g, "<br>")}` : ""}${isS && (s.bank || s.upi) ? `<br><br><b>Bank details</b><br>${esc(s.bank)} ${s.acc ? "· A/c " + esc(s.acc) : ""} ${s.ifsc ? "· IFSC " + esc(s.ifsc) : ""}${s.upi ? "<br>UPI: " + esc(s.upi) : ""}` : ""}${isS && s.terms ? `<br><br><b>Terms</b><br>${esc(s.terms).replace(/\n/g, "<br>")}` : ""}</div>
-  <div class="t"><div><span>Taxable value</span><span>${inr(c.taxable)}</span></div>${c.intra ? `<div><span>CGST</span><span>${inr(c.cgst)}</span></div><div><span>SGST</span><span>${inr(c.sgst)}</span></div>` : `<div><span>IGST</span><span>${inr(c.igst)}</span></div>`}<div><span>Round off</span><span>${inr(c.round)}</span></div><div class="g"><span>Total</span><span>${inr(c.total)}</span></div><p style="margin-top:34px;text-align:right">For <b>${esc(s.bizName)}</b><br><br>Authorised Signatory</p></div></div>
+  <div class="sum"><div style="flex:1"><b>Amount in words:</b><br>${words(c.total)} Rupees Only${d.notes ? `<br><br><b>Notes:</b><br>${esc(d.notes).replace(/\n/g, "<br>")}` : ""}${isS && (s.bank || s.upi) ? `<br><br><b>Bank details</b><br>${esc(s.bank)} ${s.acc ? "· A/c " + esc(s.acc) : ""} ${s.ifsc ? "· IFSC " + esc(s.ifsc) : ""}${s.upi ? "<br>UPI: " + esc(s.upi) : ""}` : ""}${isS && s.terms ? `<br><br><b>Terms</b><br>${esc(s.terms).replace(/\n/g, "<br>")}` : ""}${isS ? upiQr(al.due, d.no) : ""}</div>
+  <div class="t"><div><span>Taxable value</span><span>${inr(c.taxable)}</span></div>${c.intra ? `<div><span>CGST</span><span>${inr(c.cgst)}</span></div><div><span>SGST</span><span>${inr(c.sgst)}</span></div>` : `<div><span>IGST</span><span>${inr(c.igst)}</span></div>`}<div><span>Round off</span><span>${inr(c.round)}</span></div><div class="g"><span>Total</span><span>${inr(c.total)}</span></div>${al.paid > 0.5 ? `<div><span>Received</span><span>${inr(al.paid)}</span></div><div class="g"><span>Balance due</span><span>${inr(al.due)}</span></div>` : ""}<p style="margin-top:34px;text-align:right">For <b>${esc(s.bizName)}</b><br><br>Authorised Signatory</p></div></div>
   <div class="pf">Powered by ${FOOTER_BRAND}</div></div>`;
 }
 function printHtml(html) { $("print").innerHTML = html; window.print(); }
 let PDFC = {}, PNGC = {};
 function docHtml(kind, d) { return kind === "sales" || kind === "purchases" ? paperHtml(kind, d) : voucherHtml(kind, d); }
-function docModal(kind, id) {
+async function docModal(kind, id) {
+  await ensureQr();
   const d = db[kind].find(x => x.id === id); if (!d) return;
   const canWa = kind !== "purchases", isDoc = kind === "sales" || kind === "purchases", p = P(d.partyId) || {};
   const title = ({sales: "Invoice ", purchases: "Bill ", receipts: "Receipt ", payments: "Payment voucher "})[kind] + esc(d.no);
@@ -559,7 +599,7 @@ function docModal(kind, id) {
   PDFC = {}; PNGC = {}; if (canWa) { getPdf(kind, id).catch(() => {}); getPng(kind, id).catch(() => {}); }
 }
 const viewDoc = docModal, viewVoucher = docModal;
-function printDoc(kind, id) { printHtml(docHtml(kind, db[kind].find(x => x.id === id))); }
+async function printDoc(kind, id) { await ensureQr(); printHtml(docHtml(kind, db[kind].find(x => x.id === id))); }
 function waLink(phone, text) {
   let n = String(phone || "").replace(/\D/g, ""); if (n.length === 10) n = "91" + n;
   return "https://wa.me/" + n + "?text=" + encodeURIComponent(text);
@@ -571,6 +611,7 @@ const DEF_TPL = {
   payment: "Hello {party},\n\nWe have paid {amount} on {date} by {mode} (voucher {no}). Please find the payment voucher attached.\n\nThank you.\n- {business}"
 };
 const fillTpl = (t, v) => t.replace(/\{(\w+)\}/g, (m, k) => v[k] != null ? v[k] : m);
+DEF_TPL.reminder = "Hello {party},\n\nThis is a gentle reminder from {business}. Your outstanding balance is {balance}.\n\n{list}\n\nKindly make the payment at your earliest convenience.{upi}\n\nThank you.\n- {business}\nFor queries call {phone}";
 function balText(pid) { const b = pBal(pid); return b > 0.5 ? inr(b) + " due" : b < -0.5 ? inr(-b) + " advance" : "Nil"; }
 function waMsg(kind, d) {
   const p = P(d.partyId) || {}, s = S(), key = kind === "receipts" ? "receipt" : kind === "payments" ? "payment" : "invoice";
@@ -613,7 +654,7 @@ async function makePdf(html) {
 }
 function getPdf(kind, id) {
   const key = kind + id;
-  if (!PDFC[key]) PDFC[key] = (async () => { const d = db[kind].find(x => x.id === id); return new File([await makePdf(docHtml(kind, d))], String(d.no).replace(/[^A-Za-z0-9_-]+/g, "-") + ".pdf", {type: "application/pdf"}); })();
+  if (!PDFC[key]) PDFC[key] = (async () => { await ensureQr(); const d = db[kind].find(x => x.id === id); return new File([await makePdf(docHtml(kind, d))], String(d.no).replace(/[^A-Za-z0-9_-]+/g, "-") + ".pdf", {type: "application/pdf"}); })();
   return PDFC[key];
 }
 async function makePng(html) {
@@ -629,7 +670,7 @@ async function makePng(html) {
 }
 function getPng(kind, id) {
   const key = kind + id;
-  if (!PNGC[key]) PNGC[key] = makePng(docHtml(kind, db[kind].find(x => x.id === id)));
+  if (!PNGC[key]) PNGC[key] = (async () => { await ensureQr(); return makePng(docHtml(kind, db[kind].find(x => x.id === id))); })();
   return PNGC[key];
 }
 function copyImg(kind, id) {
@@ -681,7 +722,7 @@ async function waShare(kind, id, forceChat) {
 const waChat = (kind, id) => waShare(kind, id, true);
 function tplPanel() {
   const s = S(), box = (l, id, v) => fld(l, `<textarea id="${id}" rows="8">${esc(v)}</textarea>`, "full");
-  return `<div class="panel"><h3>WhatsApp message templates</h3><p class="note" style="margin-bottom:14px">Used when you send an invoice, receipt or payment voucher as a PDF. You can still edit the message before sending. Placeholders: {party} {business} {no} {date} {amount} {mode} {balance} {phone} {upi}</p><div class="grid">${box("Invoice message", "s_ti", s.tplInvoice || DEF_TPL.invoice)}${box("Receipt message", "s_tr", s.tplReceipt || DEF_TPL.receipt)}${box("Payment voucher message", "s_tp", s.tplPayment || DEF_TPL.payment)}</div></div>`;
+  return `<div class="panel"><h3>WhatsApp message templates</h3><p class="note" style="margin-bottom:14px">Used when you send an invoice, receipt or payment voucher as a PDF. You can still edit the message before sending. Placeholders: {party} {business} {no} {date} {amount} {mode} {balance} {phone} {upi}</p><div class="grid">${box("Invoice message", "s_ti", s.tplInvoice || DEF_TPL.invoice)}${box("Receipt message", "s_tr", s.tplReceipt || DEF_TPL.receipt)}${box("Payment voucher message", "s_tp", s.tplPayment || DEF_TPL.payment)}${box("Payment reminder message", "s_trm", s.tplReminder || DEF_TPL.reminder)}</div></div>`;
 }
 
 /* ---- Receipts & Payments ---- */
@@ -689,7 +730,7 @@ function vouchPage(kind) {
   const isR = kind === "receipts", [a, b] = fyRange();
   const all = db[kind].filter(d => inR(d.date, a, b));
   CUR = () => all.slice().sort((x, y) => y.date.localeCompare(x.date)).filter(d => (!Q.party || d.partyId === Q.party) && match(d.no, pname(d.partyId), d.ref || ""))
-    .map(d => `<tr><td><b>${esc(d.no)}</b></td><td>${fdate(d.date)}</td><td>${esc(pname(d.partyId))}${d.note ? `<small>${esc(d.note)}</small>` : ""}</td><td><span class="pill">${esc(d.mode)}</span>${d.ref ? `<small>${esc(d.ref)}</small>` : ""}</td><td class="r"><b>${inr(d.amount)}</b></td><td class="act"><a onclick="viewVoucher('${kind}','${d.id}')">Open</a><a onclick="vouchForm('${kind}','${d.id}')">Edit</a><a class="del" onclick="delItem('${kind}','${d.id}')">Delete</a></td></tr>`).join("");
+    .map(d => `<tr><td><b>${esc(d.no)}</b>${byTag(d)}</td><td>${fdate(d.date)}</td><td>${esc(pname(d.partyId))}${d.note ? `<small>${esc(d.note)}</small>` : ""}</td><td><span class="pill">${esc(d.mode)}</span>${d.ref ? `<small>${esc(d.ref)}</small>` : ""}</td><td class="r"><b>${inr(d.amount)}</b></td><td class="act"><a onclick="viewVoucher('${kind}','${d.id}')">Open</a><a class="ed" onclick="vouchForm('${kind}','${d.id}')">Edit</a><a class="del" onclick="delItem('${kind}','${d.id}')">Delete</a></td></tr>`).join("");
   const tot = sum(all, d => num(d.amount)), cash = sum(all.filter(d => d.mode === "Cash"), d => num(d.amount));
   return {
     title: isR ? "Receipts" : "Payments", sub: isR ? "Money received from customers" : "Money paid to suppliers",
@@ -701,6 +742,7 @@ function vouchPage(kind) {
 PAGES.receipts = () => vouchPage("receipts");
 PAGES.payments = () => vouchPage("payments");
 function vouchForm(kind, id) {
+  if (!ck(kind, 2)) return;
   const isR = kind === "receipts", ex = id && db[kind].find(x => x.id === id);
   const d = ex ? Object.assign({}, ex) : {id: uid(), no: nextVNo(kind), date: defDate(), partyId: "", amount: "", mode: "Cash", ref: "", note: ""};
   openModal((ex ? "Edit " : "New ") + (isR ? "Receipt" : "Payment"), `<div class="grid">
@@ -709,7 +751,7 @@ function vouchForm(kind, id) {
    ${fld("Amount (₹)", `<input type="number" step="any" id="v_amt" value="${d.amount}">`)}
    ${fld("Mode", `<select id="v_mode">${opts(MODES, d.mode)}</select>`)}${fld("Reference / Txn ID", `<input id="v_ref" value="${esc(d.ref)}">`)}
    ${fld("Note", `<input id="v_note" value="${esc(d.note)}">`, "full")}</div><p class="note" id="v_bal" style="margin-top:12px"></p>`, "Save", () => {
-    const n = {id: d.id, no: val("v_no"), date: val("v_date"), partyId: val("v_party"), amount: num(val("v_amt")), mode: val("v_mode"), ref: val("v_ref"), note: val("v_note")};
+    const n = {id: d.id, no: val("v_no"), date: val("v_date"), partyId: val("v_party"), amount: num(val("v_amt")), mode: val("v_mode"), ref: val("v_ref"), note: val("v_note"), by: d.by || (CU ? CU.name : "")};
     if (!n.partyId) return toast("Select a party"); if (n.amount <= 0) return toast("Enter an amount"); if (!n.no) return toast("Enter a number");
     if (db[kind].some(x => x.no === n.no && x.id !== n.id)) return toast("That number already exists");
     const i = db[kind].findIndex(x => x.id === n.id); if (i >= 0) db[kind][i] = n; else db[kind].push(n);
@@ -723,7 +765,7 @@ PAGES.entries = () => {
   const [a, b] = fyRange(), all = db.entries.filter(e => inR(e.date, a, b));
   const t = k => sum(all.filter(e => e.kind === k), e => num(e.amount));
   CUR = () => all.slice().sort((x, y) => y.date.localeCompare(x.date)).filter(e => (!Q.kind || e.kind === Q.kind) && match(e.head, e.note || ""))
-    .map(e => `<tr><td>${fdate(e.date)}</td><td><b>${esc(e.head)}</b>${e.note ? `<small>${esc(e.note)}</small>` : ""}</td><td><span class="pill">${KIND_LBL[e.kind]}</span></td><td>${esc(e.mode)}</td><td class="r">${e.gst ? inr(e.gst) : "—"}</td><td class="r"><b>${inr(e.amount)}</b></td><td class="act"><a onclick="entryForm('${e.id}')">Edit</a><a class="del" onclick="delItem('entries','${e.id}')">Delete</a></td></tr>`).join("");
+    .map(e => `<tr><td>${fdate(e.date)}</td><td><b>${esc(e.head)}</b>${e.note ? `<small>${esc(e.note)}</small>` : ""}</td><td><span class="pill">${KIND_LBL[e.kind]}</span></td><td>${esc(e.mode)}</td><td class="r">${e.gst ? inr(e.gst) : "—"}</td><td class="r"><b>${inr(e.amount)}</b></td><td class="act"><a class="ed" onclick="entryForm('${e.id}')">Edit</a><a class="del" onclick="delItem('entries','${e.id}')">Delete</a></td></tr>`).join("");
   return {
     title: "Expenses & Others", sub: "Business expenses, GST paid to government, capital and drawings",
     actions: btn("+ New Entry", "entryForm()", true),
@@ -732,6 +774,7 @@ PAGES.entries = () => {
   };
 };
 function entryForm(id) {
+  if (!ck("entries", 2)) return;
   const ex = id && db.entries.find(x => x.id === id);
   const d = ex ? Object.assign({}, ex) : {id: uid(), date: defDate(), kind: "expense", head: "", amount: "", gst: "", mode: "Cash", note: ""};
   openModal((ex ? "Edit" : "New") + " Entry", `<div class="grid">
@@ -754,7 +797,7 @@ function entryKind() { $("e_gstw").style.display = val("e_kind") === "expense" ?
 /* ---- Parties ---- */
 PAGES.parties = () => {
   let rec = 0, pay = 0; db.parties.forEach(p => { const x = pBal(p.id); if (x > 0) rec += x; else pay -= x; });
-  CUR = () => db.parties.filter(p => match(p.name, p.gstin, p.phone, p.state)).map(p => `<tr><td><b>${esc(p.name)}</b>${p.phone ? `<small>${esc(p.phone)}</small>` : ""}</td><td>${esc(p.gstin) || "—"}</td><td>${esc(p.state) || "—"}</td><td class="r">${balTxt(pBal(p.id))}</td><td class="act"><a onclick="ledger('${p.id}')">Ledger</a><a onclick="partyForm('${p.id}')">Edit</a><a class="del" onclick="delParty('${p.id}')">Delete</a></td></tr>`).join("");
+  CUR = () => db.parties.filter(p => match(p.name, p.gstin, p.phone, p.state)).map(p => `<tr><td><b>${esc(p.name)}</b>${p.phone ? `<small>${esc(p.phone)}</small>` : ""}</td><td>${esc(p.gstin) || "—"}</td><td>${esc(p.state) || "—"}</td><td class="r">${balTxt(pBal(p.id))}</td><td class="act"><a onclick="ledger('${p.id}')">Ledger</a><a class="ed" onclick="partyForm('${p.id}')">Edit</a><a class="del" onclick="delParty('${p.id}')">Delete</a></td></tr>`).join("");
   return {
     title: "Parties", sub: "Customers and suppliers in one master — balances are lifetime", noFy: true,
     actions: btn("+ New Party", "partyForm()", true),
@@ -762,6 +805,7 @@ PAGES.parties = () => {
   };
 };
 function partyForm(id) {
+  if (!ck("parties", 2)) return;
   const ex = id && P(id), d = ex ? Object.assign({}, ex) : {id: uid(), name: "", gstin: "", state: S().state, phone: "", email: "", address: "", openType: "Dr", openAmt: 0};
   openModal((ex ? "Edit" : "New") + " Party", `<div class="grid">
    ${fld("Name", `<input id="p_name" value="${esc(d.name)}">`, "full")}${fld("GSTIN", `<input id="p_gstin" value="${esc(d.gstin)}" maxlength="15" style="text-transform:uppercase">`)}
@@ -776,6 +820,7 @@ function partyForm(id) {
   });
 }
 function delParty(id) {
+  if (!ck("parties", 3)) return;
   const used = [...db.sales, ...db.purchases, ...db.receipts, ...db.payments].some(x => x.partyId === id);
   if (used) return toast("This party has transactions and can't be deleted");
   if (confirm("Delete this party?")) { db.parties = db.parties.filter(p => p.id !== id); save(); render(); }
@@ -794,18 +839,18 @@ function ledger(id) {
 
 /* ---- Items ---- */
 PAGES.items = () => {
-  const t = today();
-  CUR = () => db.items.filter(i => match(i.name, i.hsn)).map(i => { const q = stockQty(i.id, "9999-12-31"); return `<tr><td><b>${esc(i.name)}</b></td><td>${esc(i.hsn) || "—"}</td><td class="r">${i.gst}%</td><td class="r">${inr(i.saleRate)}</td><td class="r">${inr(i.costRate)}</td><td class="r"><b class="${q < 0 ? "cr" : ""}">${q} ${esc(i.unit)}</b></td><td class="act"><a onclick="itemForm('${i.id}')">Edit</a><a class="del" onclick="delItemMaster('${i.id}')">Delete</a></td></tr>`; }).join("");
+  CUR = () => db.items.filter(i => match(i.name, i.hsn) && (!Q.low || isLow(i))).map(i => { const q = stockQty(i.id, "9999-12-31"), low = isLow(i); return `<tr><td><b>${esc(i.name)}</b>${low ? `<small style="color:#ff8a8a">Low stock — alert at ${i.minQty}</small>` : ""}</td><td>${esc(i.hsn) || "—"}</td><td class="r">${i.gst}%</td><td class="r">${inr(i.saleRate)}</td><td class="r">${inr(i.costRate)}</td><td class="r"><b class="${q < 0 || low ? "cr" : ""}">${q} ${esc(i.unit)}</b></td><td class="act"><a class="ed" onclick="itemForm('${i.id}')">Edit</a><a class="del" onclick="delItemMaster('${i.id}')">Delete</a></td></tr>`; }).join("");
   return {
-    title: "Items", sub: "Products and services with HSN/SAC, GST rate and live stock", noFy: true,
-    actions: btn("Bulk import", "importForm()") + btn("+ New Item", "itemForm()", true),
-    body: `<div class="stats">${statCard("Items", db.items.length)}${statCard("Stock Value", inr(stockValue("9999-12-31")), "at cost rate")}${statCard("Out of stock", db.items.filter(i => stockQty(i.id, "9999-12-31") <= 0).length)}${statCard("Avg GST", db.items.length ? r2(sum(db.items, i => +i.gst) / db.items.length) + "%" : "—")}</div>` + listPanel(["Item", "HSN/SAC", ["GST", "r"], ["Sale rate", "r"], ["Cost rate", "r"], ["Stock", "r"], ""], "", "Search items…")
+    title: "Items", sub: "Products and services with HSN/SAC, GST rate, live stock and low-stock alerts", noFy: true,
+    actions: btn("Reorder list", "reorderCsv()") + btn("Bulk import", "importForm()") + btn("+ New Item", "itemForm()", true),
+    body: `<div class="stats">${statCard("Items", db.items.length)}${statCard("Stock Value", inr(stockValue("9999-12-31")), "at cost rate")}${statCard("Out of stock", db.items.filter(i => stockQty(i.id, "9999-12-31") <= 0).length)}${statCard("Low stock", lowItems().length, "at or below alert level")}</div>` + listPanel(["Item", "HSN/SAC", ["GST", "r"], ["Sale rate", "r"], ["Cost rate", "r"], ["Stock", "r"], ""], `<select onchange="Q.low=this.value;refreshRows()"><option value="">All items</option><option value="1" ${Q.low ? "selected" : ""}>Low stock only</option></select>`, "Search items…")
   };
 };
 function itemForm(id) {
-  const ex = db.items.find(x => x.id === id), d = ex ? Object.assign({}, ex) : {id: uid(), name: "", hsn: "", unit: "Nos", gst: 18, saleRate: 0, costRate: 0, openQty: 0};
-  openModal((ex ? "Edit" : "New") + " Item", `<div class="grid">${fld("Item name", `<input id="i_name" value="${esc(d.name)}">`, "full")}${fld("HSN / SAC", `<input id="i_hsn" value="${esc(d.hsn)}">`)}${fld("Unit", `<input id="i_unit" value="${esc(d.unit)}">`)}${fld("GST %", `<select id="i_gst">${opts(GST_RATES.map(g => [g, g + "%"]), d.gst)}</select>`)}${fld("Sale rate (excl. GST)", `<input type="number" step="any" id="i_sr" value="${d.saleRate}">`)}${fld("Cost / purchase rate", `<input type="number" step="any" id="i_cr" value="${d.costRate}">`)}${fld("Opening stock qty", `<input type="number" step="any" id="i_oq" value="${d.openQty}">`)}</div><p class="note" style="margin-top:12px">Stock is valued at cost rate × quantity. Leave quantity at 0 for services.</p>`, "Save", () => {
-    const n = {id: d.id, name: val("i_name"), hsn: val("i_hsn"), unit: val("i_unit"), gst: +val("i_gst"), saleRate: num(val("i_sr")), costRate: num(val("i_cr")), openQty: num(val("i_oq"))};
+  if (!ck("items", 2)) return;
+  const ex = db.items.find(x => x.id === id), d = ex ? Object.assign({}, ex) : {id: uid(), name: "", hsn: "", unit: "Nos", gst: 18, saleRate: 0, costRate: 0, openQty: 0, minQty: 0};
+  openModal((ex ? "Edit" : "New") + " Item", `<div class="grid">${fld("Item name", `<input id="i_name" value="${esc(d.name)}">`, "full")}${fld("HSN / SAC", `<input id="i_hsn" value="${esc(d.hsn)}">`)}${fld("Unit", `<input id="i_unit" value="${esc(d.unit)}">`)}${fld("GST %", `<select id="i_gst">${opts(GST_RATES.map(g => [g, g + "%"]), d.gst)}</select>`)}${fld("Sale rate (excl. GST)", `<input type="number" step="any" id="i_sr" value="${d.saleRate}">`)}${fld("Cost / purchase rate", `<input type="number" step="any" id="i_cr" value="${d.costRate}">`)}${fld("Opening stock qty", `<input type="number" step="any" id="i_oq" value="${d.openQty}">`)}${fld("Low-stock alert at qty (0 = off)", `<input type="number" step="any" id="i_mq" value="${d.minQty || 0}">`)}</div><p class="note" style="margin-top:12px">Stock is valued at cost rate × quantity. Leave quantity at 0 for services.</p>`, "Save", () => {
+    const n = {id: d.id, name: val("i_name"), hsn: val("i_hsn"), unit: val("i_unit"), gst: +val("i_gst"), saleRate: num(val("i_sr")), costRate: num(val("i_cr")), openQty: num(val("i_oq")), minQty: num(val("i_mq"))};
     if (!n.name) return toast("Enter item name");
     const i = db.items.findIndex(x => x.id === n.id); if (i >= 0) db.items[i] = n; else db.items.push(n);
     save(); closeModal(); render(); toast("Saved");
@@ -813,10 +858,10 @@ function itemForm(id) {
 }
 /* ---- Bulk import items ---- */
 let IMP = [];
-const IMP_HEAD = ["Item name", "HSN/SAC", "Unit", "GST %", "Sale rate (excl. GST)", "Cost rate", "Opening stock"];
+const IMP_HEAD = ["Item name", "HSN/SAC", "Unit", "GST %", "Sale rate (excl. GST)", "Cost rate", "Opening stock", "Min stock alert"];
 const csvq = v => '"' + String(v).replace(/"/g, '""') + '"';
 function itemTemplate() {
-  download(CLIENT_NAME + "_items_template.csv", "\ufeff" + [IMP_HEAD, ["Sample item", "1234", "Nos", "18", "100", "80", "10"], ["Sample service", "9987", "Nos", "18", "500", "0", "0"]].map(r => r.map(csvq).join(",")).join("\r\n"), "text/csv");
+  download(CLIENT_NAME + "_items_template.csv", "\ufeff" + [IMP_HEAD, ["Sample item", "1234", "Nos", "18", "100", "80", "10", "5"], ["Sample service", "9987", "Nos", "18", "500", "0", "0", "0"]].map(r => r.map(csvq).join(",")).join("\r\n"), "text/csv");
 }
 function parseDelim(text) {
   text = text.replace(/^\ufeff/, "");
@@ -836,6 +881,7 @@ function parseDelim(text) {
 function impField(h) {
   h = String(h).toLowerCase().replace(/[^a-z0-9]/g, "");
   if (/hsn|sac/.test(h)) return "hsn";
+  if (/min|reorder|alert/.test(h)) return "minQty";
   if (/open|stock|qty|quantity/.test(h)) return "openQty";
   if (/sale|sell|mrp/.test(h)) return "saleRate";
   if (/cost|purchase|buy/.test(h)) return "costRate";
@@ -853,7 +899,7 @@ function buildImport(rows) {
   rows.slice(1).forEach((r, k) => {
     const o = {}; map.forEach((f, i) => { if (f && o[f] === undefined) o[f] = String(r[i] == null ? "" : r[i]).trim(); });
     const clean = s => num(String(s || "").replace(/[₹,\s]/g, ""));
-    const it = {name: o.name || "", hsn: o.hsn || "", unit: o.unit || "", gstRaw: (o.gst || "").replace(/[%\s]/g, ""), saleRate: clean(o.saleRate), costRate: clean(o.costRate), openQty: clean(o.openQty), has: o, line: k + 2};
+    const it = {name: o.name || "", hsn: o.hsn || "", unit: o.unit || "", gstRaw: (o.gst || "").replace(/[%\s]/g, ""), saleRate: clean(o.saleRate), costRate: clean(o.costRate), openQty: clean(o.openQty), minQty: clean(o.minQty), has: o, line: k + 2};
     let err = "";
     if (!it.name) err = "Missing item name";
     else if (it.gstRaw !== "" && !GST_RATES.includes(num(it.gstRaw))) err = "GST must be one of " + GST_RATES.join(", ");
@@ -866,6 +912,7 @@ function buildImport(rows) {
   return {items: out, present};
 }
 function importForm() {
+  if (!ck("items", 2)) return;
   IMP = [];
   openModal("Bulk import items", `<p class="note" style="margin-bottom:12px">Upload a CSV or Excel file (.csv, .xlsx). Items with the same name are <b>updated</b>; new names are added. Columns: ${IMP_HEAD.join(", ")}.</p>
   <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn" onclick="itemTemplate()">Download template</button><input type="file" id="imp_file" accept=".csv,.txt,.xlsx,.xls" onchange="impRead(this.files[0])"></div><div id="imp_out" style="margin-top:16px"></div>`, "Import", applyImport);
@@ -890,20 +937,22 @@ async function impRead(f) {
   } catch (e) { IMP = []; out.innerHTML = `<p class="note" style="color:#ff8a8a">Could not read the file: ${esc(e.message)}</p>`; }
 }
 function applyImport() {
+  if (!ck("items", 2)) return;
   if (!IMP.length) return toast("Choose a file with at least one valid row");
   let add = 0, upd = 0;
   IMP.forEach(i => {
     if (i.exists) {
       const t = db.items.find(x => x.id === i.exists.id), h = i.has;
       if (h.hsn) t.hsn = i.hsn; if (h.unit) t.unit = i.unit; if (i.gst != null) t.gst = i.gst;
-      if (h.saleRate) t.saleRate = i.saleRate; if (h.costRate) t.costRate = i.costRate; if (h.openQty) t.openQty = i.openQty;
+      if (h.saleRate) t.saleRate = i.saleRate; if (h.costRate) t.costRate = i.costRate; if (h.openQty) t.openQty = i.openQty; if (h.minQty) t.minQty = i.minQty;
       upd++;
-    } else { db.items.push({id: uid(), name: i.name, hsn: i.hsn, unit: i.unit || "Nos", gst: i.gst == null ? 18 : i.gst, saleRate: i.saleRate, costRate: i.costRate, openQty: i.openQty}); add++; }
+    } else { db.items.push({id: uid(), name: i.name, hsn: i.hsn, unit: i.unit || "Nos", gst: i.gst == null ? 18 : i.gst, saleRate: i.saleRate, costRate: i.costRate, openQty: i.openQty, minQty: i.minQty}); add++; }
   });
   save(); closeModal(); render(); toast(`Imported: ${add} added, ${upd} updated`);
 }
 
 function delItemMaster(id) {
+  if (!ck("items", 3)) return;
   const used = [...db.sales, ...db.purchases].some(d => d.lines.some(l => l.itemId === id));
   if (used) return toast("Item is used in invoices and can't be deleted");
   if (confirm("Delete this item?")) { db.items = db.items.filter(i => i.id !== id); save(); render(); }
@@ -1031,8 +1080,9 @@ PAGES.backup = () => ({
   <div class="panel"><h3>Record counts</h3><div class="stats" style="margin:0">${statCard("Parties", db.parties.length)}${statCard("Items", db.items.length)}${statCard("Invoices / bills", db.sales.length + db.purchases.length)}${statCard("Vouchers & entries", db.receipts.length + db.payments.length + db.entries.length)}</div></div>
   <div class="panel"><h3>Danger zone</h3><p class="note" style="margin-bottom:14px">Erases all data in this browser for ${esc(CLIENT_NAME)}. Download a backup first.</p><button class="btn" style="color:var(--bad)" onclick="wipe()">Erase all data</button></div>`
 });
-function backupNow() { download(`${CLIENT_NAME}_backup_${today()}.json`, JSON.stringify(db, null, 2), "application/json"); toast("Backup downloaded"); }
+function backupNow() { if (!ck("backup", 1)) return; download(`${CLIENT_NAME}_backup_${today()}.json`, JSON.stringify(db, null, 2), "application/json"); toast("Backup downloaded"); }
 function importFile(e) {
+  if (!ck("backup", 3)) { e.target.value = ""; return; }
   const f = e.target.files[0]; if (!f) return;
   const rd = new FileReader();
   rd.onload = () => {
@@ -1046,7 +1096,7 @@ function importFile(e) {
   };
   rd.readAsText(f);
 }
-function wipe() { if (confirm("Erase ALL data for this client" + (GH.on() ? " — including the copy on GitHub" : "") + "? This cannot be undone.") && confirm("Really erase everything?")) { db = defaults(); save(); render(); } }
+function wipe() { if (ck("backup", 3) && confirm("Erase ALL data for this client" + (GH.on() ? " — including the copy on GitHub" : "") + "? This cannot be undone.") && confirm("Really erase everything?")) { db = defaults(); save(); render(); } }
 
 /* ---- Settings ---- */
 PAGES.settings = () => {
@@ -1055,16 +1105,18 @@ PAGES.settings = () => {
     title: "Settings", sub: "Business details printed on every invoice", noFy: true, actions: btn("Save settings", "saveSettings()", true),
     body: `<div class="panel"><h3>Business</h3><div class="grid">${fld("Business name", `<input id="s_biz" value="${esc(s.bizName)}">`)}${fld("GSTIN", `<input id="s_gstin" value="${esc(s.gstin)}" style="text-transform:uppercase">`)}${fld("PAN", `<input id="s_pan" value="${esc(s.pan)}">`)}${fld("State (for CGST/SGST vs IGST)", `<select id="s_state">${opts(STATES, s.state)}</select>`)}${fld("Phone", `<input id="s_phone" value="${esc(s.phone)}">`)}${fld("Email", `<input id="s_email" value="${esc(s.email)}">`)}${fld("Address", `<textarea id="s_addr">${esc(s.address)}</textarea>`, "full")}</div></div>
     <div class="panel"><h3>Bank & terms</h3><div class="grid">${fld("Bank name", `<input id="s_bank" value="${esc(s.bank)}">`)}${fld("Account number", `<input id="s_acc" value="${esc(s.acc)}">`)}${fld("IFSC", `<input id="s_ifsc" value="${esc(s.ifsc)}">`)}${fld("UPI ID", `<input id="s_upi" value="${esc(s.upi)}">`)}${fld("Invoice terms", `<textarea id="s_terms">${esc(s.terms)}</textarea>`, "full")}</div></div>
-    <div class="panel"><h3>Accounts</h3><div class="grid">${fld("Sales prefix", `<input id="s_sp" value="${esc(s.salePrefix)}">`)}${fld("Purchase prefix", `<input id="s_pp" value="${esc(s.purchPrefix)}">`)}${fld("Opening cash & bank balance (₹)", `<input type="number" step="any" id="s_oc" value="${s.openingCash}">`)}${fld("Lock PIN (leave empty for none)", `<input type="password" id="s_pin" value="${esc(s.pin)}" maxlength="8" autocomplete="new-password">`)}</div><p class="note" style="margin-top:12px">The PIN only hides the screen on a shared computer — it is not encryption.</p></div>${tplPanel()}${ghPanel()}`
+    <div class="panel"><h3>Accounts</h3><div class="grid">${fld("Sales prefix", `<input id="s_sp" value="${esc(s.salePrefix)}">`)}${fld("Purchase prefix", `<input id="s_pp" value="${esc(s.purchPrefix)}">`)}${fld("Opening cash & bank balance (₹)", `<input type="number" step="any" id="s_oc" value="${s.openingCash}">`)}${fld("…of which held in bank/UPI (₹)", `<input type="number" step="any" id="s_ob" value="${s.openingBank || 0}">`)}${fld("UPI QR on unpaid invoices", `<select id="s_qr">${opts([["yes", "Show (needs UPI ID above)"], ["no", "Hide"]], s.qrOn === false ? "no" : "yes")}</select>`)}${fld("Lock PIN (leave empty for none)", `<input type="password" id="s_pin" value="${esc(s.pin)}" maxlength="8" autocomplete="new-password">`)}</div><p class="note" style="margin-top:12px">The PIN only hides the screen on a shared computer — it is not encryption.</p></div>${usersPanel()}${tplPanel()}${ghPanel()}`
   };
 };
 function saveSettings() {
-  Object.assign(S(), {bizName: val("s_biz") || CLIENT_NAME, gstin: val("s_gstin").toUpperCase(), pan: val("s_pan").toUpperCase(), state: val("s_state"), phone: val("s_phone"), email: val("s_email"), address: val("s_addr"), bank: val("s_bank"), acc: val("s_acc"), ifsc: val("s_ifsc"), upi: val("s_upi"), terms: val("s_terms"), salePrefix: val("s_sp") || "INV", purchPrefix: val("s_pp") || "PUR", openingCash: num(val("s_oc")), pin: val("s_pin"), tplInvoice: val("s_ti"), tplReceipt: val("s_tr"), tplPayment: val("s_tp")});
+  if (!ck("__owner", 1)) return;
+  Object.assign(S(), {bizName: val("s_biz") || CLIENT_NAME, gstin: val("s_gstin").toUpperCase(), pan: val("s_pan").toUpperCase(), state: val("s_state"), phone: val("s_phone"), email: val("s_email"), address: val("s_addr"), bank: val("s_bank"), acc: val("s_acc"), ifsc: val("s_ifsc"), upi: val("s_upi"), terms: val("s_terms"), salePrefix: val("s_sp") || "INV", purchPrefix: val("s_pp") || "PUR", openingCash: num(val("s_oc")), pin: val("s_pin"), tplInvoice: val("s_ti"), tplReceipt: val("s_tr"), tplPayment: val("s_tp"), tplReminder: val("s_trm"), openingBank: num(val("s_ob")), qrOn: val("s_qr") !== "no"});
   save(); render(); toast("Settings saved");
 }
 
 /* ---- Lock ---- */
 function lockApp() {
+  if (multi()) return logout();
   if (!S().pin) { toast("Set a PIN in Settings first"); return setPage("settings"); }
   showLock();
 }
@@ -1103,7 +1155,7 @@ async function ghGet() {
 function applyRemote(g) {
   db = Object.assign(defaults(), g.data); GH.sha = g.sha; GH.pending = false; GH.store();
   try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { mem = JSON.stringify(db); }
-  render(); ghStatus("Synced to GitHub ✓ " + clock());
+  db.users = db.users || []; render(); if (db.users.length) ensureLogin(); ghStatus("Synced to GitHub ✓ " + clock());
 }
 function queueSync() {
   if (!GH.on()) return;
@@ -1173,17 +1225,300 @@ async function initSync() {
   GH.load(); if (!GH.on()) return;
   GH.sha = GH.cfg.sha || null; GH.pending = !!GH.cfg.pending;
   if (GH.pending) await ghPush(); else await ghPull();
-  if (S().pin && !$("lockscr")) showLock();
+  if (db.users.length) ensureLogin(); else if (S().pin && !$("lockscr")) showLock();
   GH.poll = true; setInterval(() => { if (!$("layer").innerHTML) ghPull(); }, 45000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden && !$("layer").innerHTML) ghPull(); });
 }
 window.addEventListener("beforeunload", e => { if (GH.on() && GH.pending) { e.preventDefault(); e.returnValue = ""; } });
 
+/* ============================================================
+   v9 extras: payment status, ageing, QR, low stock, cash book, users
+   ============================================================ */
+db.users = db.users || [];
+
+/* ---- sha-256 (sync, for PIN hashes) ---- */
+const sha256 = (() => {
+  const K = [], H0 = []; let c = 0;
+  for (let n = 2; c < 64; n++) { let p = true; for (let j = 2; j * j <= n; j++) if (n % j === 0) { p = false; break; } if (p) { if (c < 8) H0[c] = Math.floor((Math.sqrt(n) % 1) * 4294967296); K[c++] = Math.floor((Math.cbrt(n) % 1) * 4294967296); } }
+  const rr = (x, n) => (x >>> n) | (x << (32 - n));
+  return str => {
+    const b = unescape(encodeURIComponent(str)), l = b.length, w = [];
+    for (let i = 0; i < l; i++) w[i >> 2] |= b.charCodeAt(i) << (24 - (i % 4) * 8);
+    w[l >> 2] |= 0x80 << (24 - (l % 4) * 8); w[(((l + 8) >> 6) << 4) + 15] = l * 8;
+    const H = H0.slice();
+    for (let o = 0; o < w.length; o += 16) {
+      const x = new Array(64);
+      for (let i = 0; i < 64; i++) {
+        if (i < 16) x[i] = w[o + i] | 0;
+        else { const a = x[i - 15], d = x[i - 2]; x[i] = (x[i - 16] + (rr(a, 7) ^ rr(a, 18) ^ (a >>> 3)) + x[i - 7] + (rr(d, 17) ^ rr(d, 19) ^ (d >>> 10))) | 0; }
+      }
+      let [a, b2, c2, d, e, f, g, h] = H;
+      for (let i = 0; i < 64; i++) {
+        const t1 = (h + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + x[i]) | 0;
+        const t2 = ((rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & b2) ^ (a & c2) ^ (b2 & c2))) | 0;
+        h = g; g = f; f = e; e = (d + t1) | 0; d = c2; c2 = b2; b2 = a; a = (t1 + t2) | 0;
+      }
+      [a, b2, c2, d, e, f, g, h].forEach((v, i) => { H[i] = (H[i] + v) | 0; });
+    }
+    return H.map(v => (v >>> 0).toString(16).padStart(8, "0")).join("");
+  };
+})();
+const hashPin = (id, pin) => sha256("krn|" + id + "|" + pin);
+
+/* ---- roles & permissions ---- */
+const MODS = [["dashboard", "Dashboard"], ["sales", "Sales invoices"], ["purchases", "Purchase bills"], ["receipts", "Receipts"], ["payments", "Payments"], ["entries", "Expenses & Others"], ["parties", "Parties"], ["items", "Items"], ["outstanding", "Outstanding & Ageing"], ["cashbook", "Cash Book"], ["gst", "GST Reports"], ["reports", "Profit & Loss / Balance Sheet"], ["backup", "Import / Backup"]];
+const LVL = ["No access", "View only", "Add & edit", "Add, edit & delete"];
+const PM = {dashboard: "dashboard", sales: "sales", purchases: "purchases", receipts: "receipts", payments: "payments", entries: "entries", parties: "parties", items: "items", outstanding: "outstanding", cashbook: "cashbook", gst: "gst", pnl: "reports", bs: "reports", backup: "backup", settings: "__owner"};
+const PRESETS = {
+  staff: {dashboard: 0, sales: 2, purchases: 0, receipts: 2, payments: 0, entries: 0, parties: 2, items: 1, outstanding: 1, cashbook: 0, gst: 0, reports: 0, backup: 0},
+  accountant: {dashboard: 1, sales: 3, purchases: 3, receipts: 3, payments: 3, entries: 3, parties: 3, items: 3, outstanding: 1, cashbook: 1, gst: 1, reports: 1, backup: 1},
+  view: {dashboard: 1, sales: 1, purchases: 1, receipts: 1, payments: 1, entries: 1, parties: 1, items: 1, outstanding: 1, cashbook: 1, gst: 1, reports: 1, backup: 0}
+};
+let CU = null;
+const SESS = KEY + "_user";
+function restoreUser() {
+  let id = null; try { id = sessionStorage.getItem(SESS); } catch (e) {}
+  CU = db.users.find(u => u.id === id) || null;
+}
+const multi = () => db.users.length > 0;
+function can(mod, l) {
+  if (!multi()) return true;
+  if (!CU) return false;
+  if (CU.owner) return true;
+  if (mod === "__owner") return false;
+  return ((CU.perms || {})[mod] || 0) >= l;
+}
+function deny() { toast("You don't have permission for that"); return false; }
+const ck = (mod, l) => can(mod, l) || deny();
+const pageOk = k => k === "__lock" || (PM[k] ? can(PM[k], 1) : false);
+function firstPage() { const all = NAV.flatMap(g => g[1].map(x => x[0])); return all.find(k => k !== "__lock" && pageOk(k)) || "noaccess"; }
+function pageLv() { if (!multi()) return 3; if (CU && CU.owner) return 3; const m = PM[page]; return m && m !== "__owner" && CU ? ((CU.perms || {})[m] || 0) : 0; }
+function actionsOk() {
+  if (["sales", "purchases", "receipts", "payments", "entries", "parties", "items"].includes(page)) return can(page, 2);
+  if (page === "dashboard") return can("sales", 2);
+  return true;
+}
+const byTag = d => multi() && d.by ? `<small>by ${esc(d.by)}</small>` : "";
+PAGES.noaccess = () => ({title: "No access", sub: "", noFy: true, body: `<div class="panel"><p class="note">Your user has no screens enabled. Ask the owner to update your access.</p></div>`});
+
+function showLogin() {
+  if ($("lockscr")) $("lockscr").remove();
+  const d = document.createElement("div"); d.className = "lock"; d.id = "lockscr";
+  d.innerHTML = `<div class="card"><div class="logo">${$("logo").textContent}</div><h2>${esc(S().bizName)}</h2><p>Sign in to continue</p><select id="lg_u" style="margin-bottom:10px">${db.users.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join("")}</select><input type="password" id="pinin" placeholder="PIN" inputmode="numeric"><button class="btn pri" style="width:100%;justify-content:center;margin-top:14px" onclick="tryLogin()">Sign in</button></div>`;
+  document.body.appendChild(d);
+  $("pinin").addEventListener("keydown", e => { if (e.key === "Enter") tryLogin(); });
+  setTimeout(() => { const e = $("pinin"); if (e) e.focus(); }, 50);
+}
+let LG_FAIL = 0;
+function tryLogin() {
+  const u = db.users.find(x => x.id === $("lg_u").value);
+  if (u && hashPin(u.id, $("pinin").value) === u.pin) {
+    CU = u; LG_FAIL = 0; try { sessionStorage.setItem(SESS, u.id); } catch (e) {}
+    $("lockscr").remove(); page = pageOk("dashboard") ? "dashboard" : firstPage(); render(); toast("Welcome, " + u.name);
+  } else { LG_FAIL++; toast("Wrong PIN" + (LG_FAIL > 2 ? " — try again in a moment" : "")); $("pinin").value = ""; }
+}
+function ensureLogin() {
+  if (!multi()) { CU = null; const l = $("lockscr"); if (l) l.remove(); return; }
+  restoreUser();
+  if (CU) { const l = $("lockscr"); if (l) l.remove(); render(); } else showLogin();
+}
+function logout() { CU = null; try { sessionStorage.removeItem(SESS); } catch (e) {} showLogin(); }
+
+/* ---- users panel (Settings) ---- */
+function usersPanel() {
+  if (!can("__owner", 1)) return "";
+  if (!multi()) return `<div class="panel"><h3>Users & access</h3><p class="note" style="margin-bottom:14px">Turn on multi-user to give each person their own PIN and choose exactly what they can see and do. PINs are stored as hashes, but this is a screen-level lock inside the app (not server security) — fine for shop staff, not a substitute for protecting your GitHub token.</p><div class="grid">${fld("Owner name", `<input id="o_name" placeholder="e.g. Yuvaraj">`)}${fld("Owner PIN (4–8 digits)", `<input type="password" id="o_pin" inputmode="numeric" maxlength="8">`)}</div><div style="margin-top:14px">${btn("Turn on multi-user", "enableUsers()", true)}</div></div>`;
+  return `<div class="panel"><h3>Users & access <span class="pill">On</span></h3><div class="tw"><table><thead><tr><th>Name</th><th>Access</th><th></th></tr></thead><tbody>${db.users.map(u => `<tr><td><b>${esc(u.name)}</b>${CU && CU.id === u.id ? "<small>You</small>" : ""}</td><td>${u.owner ? "Owner — full access" : MODS.filter(m => (u.perms || {})[m[0]] > 0).map(m => esc(m[1]) + " · " + LVL[u.perms[m[0]]].toLowerCase()).slice(0, 4).join(", ") + (MODS.filter(m => (u.perms || {})[m[0]] > 0).length > 4 ? " …" : "") || "No screens"}</td><td class="act"><a onclick="userForm('${u.id}')">Edit</a>${CU && CU.id === u.id ? "" : `<a class="del" onclick="delUser('${u.id}')">Delete</a>`}</td></tr>`).join("")}</tbody></table></div><div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">${btn("+ Add user", "userForm()", true)}${btn("Turn off multi-user", "disableUsers()")}</div><p class="note" style="margin-top:12px">New device for a staff member: open the app → Settings → GitHub sync → paste the token once, then sign in with their PIN.</p></div>`;
+}
+function enableUsers() {
+  const n = val("o_name"), p = val("o_pin");
+  if (!n) return toast("Enter the owner name"); if (!/^\d{4,8}$/.test(p)) return toast("PIN must be 4–8 digits");
+  const u = {id: uid(), name: n, owner: true, perms: {}}; u.pin = hashPin(u.id, p); db.users = [u]; CU = u;
+  try { sessionStorage.setItem(SESS, u.id); } catch (e) {}
+  S().pin = ""; save(); render(); toast("Multi-user is on — you're signed in as " + n);
+}
+function disableUsers() { if (!confirm("Turn off multi-user? Everyone will get full access again and the user list is deleted.")) return; db.users = []; CU = null; save(); render(); }
+function userForm(id) {
+  if (!ck("__owner", 1)) return;
+  const ex = id && db.users.find(u => u.id === id), d = ex ? JSON.parse(JSON.stringify(ex)) : {id: uid(), name: "", owner: false, perms: Object.assign({}, PRESETS.staff)};
+  openModal((ex ? "Edit " : "New ") + "User", `<div class="grid">${fld("Name", `<input id="u_name" value="${esc(d.name)}">`)}${fld(ex ? "New PIN (leave blank to keep)" : "PIN (4–8 digits)", `<input type="password" id="u_pin" inputmode="numeric" maxlength="8" autocomplete="new-password">`)}</div>
+  <label style="display:flex;gap:10px;align-items:center;margin-top:16px;cursor:pointer"><input type="checkbox" id="u_own" style="width:20px;height:20px;padding:0" ${d.owner ? "checked" : ""} onchange="$('u_perm').style.display=this.checked?'none':''"><b>Owner (full access, can manage users & settings)</b></label>
+  <div id="u_perm" style="${d.owner ? "display:none" : ""}"><div style="margin:14px 0 8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="note">Quick set:</span><button class="btn" onclick="userPreset('staff')">Staff</button><button class="btn" onclick="userPreset('accountant')">Accountant</button><button class="btn" onclick="userPreset('view')">View only</button></div>
+  <div class="tw"><table><thead><tr><th>Screen</th><th>Access</th></tr></thead><tbody>${MODS.map(m => `<tr><td>${m[1]}</td><td><select id="u_p_${m[0]}">${opts(LVL.map((l, i) => [i, l]), (d.perms || {})[m[0]] || 0)}</select></td></tr>`).join("")}</tbody></table></div></div>`, "Save", () => {
+    const name = val("u_name"), pin = val("u_pin"), own = $("u_own").checked;
+    if (!name) return toast("Enter a name");
+    if (db.users.some(u => u.name.toLowerCase() === name.toLowerCase() && u.id !== d.id)) return toast("That name is already used");
+    if (!ex && !/^\d{4,8}$/.test(pin)) return toast("PIN must be 4–8 digits");
+    if (pin && !/^\d{4,8}$/.test(pin)) return toast("PIN must be 4–8 digits");
+    if (ex && ex.owner && !own && db.users.filter(u => u.owner).length < 2) return toast("There must be at least one owner");
+    const perms = {}; MODS.forEach(m => { perms[m[0]] = +$("u_p_" + m[0]).value; });
+    const n = {id: d.id, name, owner: own, perms: own ? {} : perms, pin: ex ? ex.pin : ""};
+    if (pin) n.pin = hashPin(n.id, pin);
+    const i = db.users.findIndex(u => u.id === n.id); if (i >= 0) db.users[i] = n; else db.users.push(n);
+    if (CU && CU.id === n.id) CU = n;
+    save(); closeModal(); render(); toast("User saved");
+  });
+}
+function userPreset(k) { MODS.forEach(m => { $("u_p_" + m[0]).value = PRESETS[k][m[0]] || 0; }); }
+function delUser(id) {
+  if (!ck("__owner", 1)) return;
+  const u = db.users.find(x => x.id === id); if (!u || (CU && CU.id === id)) return;
+  if (u.owner && db.users.filter(x => x.owner).length < 2) return toast("There must be at least one owner");
+  if (confirm("Delete user " + u.name + "?")) { db.users = db.users.filter(x => x.id !== id); save(); render(); }
+}
+
+/* ---- payment allocation / status ---- */
+function allocAll() {
+  const res = {inv: {}, open: {recv: {}, pay: {}}, adv: {recv: {}, pay: {}}};
+  const run = (docs, vouchers, side, openType) => {
+    db.parties.forEach(p => {
+      const mine = docs.filter(d => d.partyId === p.id).sort((a, b) => a.date.localeCompare(b.date) || a.no.localeCompare(b.no));
+      const vs = vouchers.filter(v => v.partyId === p.id);
+      let pool = 0; const linked = {};
+      vs.forEach(v => { if (v.invId && mine.some(d => d.id === v.invId)) linked[v.invId] = (linked[v.invId] || 0) + num(v.amount); else pool += num(v.amount); });
+      mine.forEach(d => { const t = docCalc(d).total; if ((linked[d.id] || 0) > t) pool += linked[d.id] - t; });
+      const o = p.openType === openType ? num(p.openAmt) : 0, op = Math.min(pool, o); pool -= op; res.open[side][p.id] = r2(o - op);
+      mine.forEach(d => {
+        const t = docCalc(d).total, l = Math.min(linked[d.id] || 0, t), need = t - l, take = Math.min(pool, need); pool -= take;
+        res.inv[d.id] = {total: t, paid: r2(l + take), due: r2(t - l - take)};
+      });
+      res.adv[side][p.id] = r2(pool);
+    });
+  };
+  run(db.sales, db.receipts, "recv", "Dr"); run(db.purchases, db.payments, "pay", "Cr");
+  return res;
+}
+function payStat(a) { return !a ? "Unpaid" : a.due < 0.5 ? "Paid" : a.paid > 0.5 ? "Part paid" : "Unpaid"; }
+const statPill = s => `<span class="pill" style="color:${s === "Paid" ? "#7ee2a0" : s === "Part paid" ? "#ffd27a" : "#ff8a8a"}">${s}</span>`;
+
+/* ---- low stock ---- */
+const isLow = i => num(i.minQty) > 0 && stockQty(i.id, "9999-12-31") <= num(i.minQty);
+const lowItems = () => db.items.filter(isLow);
+function reorderCsv() {
+  const rows = [["Item", "HSN/SAC", "Unit", "In stock", "Alert level", "Short by", "Cost rate"], ...lowItems().map(i => { const q = stockQty(i.id, "9999-12-31"); return [i.name, i.hsn, i.unit, q, i.minQty, Math.max(0, num(i.minQty) - q), i.costRate]; })];
+  download(CLIENT_NAME + "_reorder_list_" + today() + ".csv", "\ufeff" + rows.map(r => r.map(csvq).join(",")).join("\r\n"), "text/csv");
+}
+
+/* ---- UPI QR ---- */
+let QRP = null;
+function ensureQr() { if (window.qrcode) return Promise.resolve(); if (!QRP) QRP = loadScript("https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js").catch(() => { QRP = null; }); return QRP; }
+function upiQr(due, no) {
+  const s = S(); if (!s.upi || s.qrOn === false || due < 0.5 || !window.qrcode) return "";
+  try {
+    const uri = "upi://pay?pa=" + s.upi.trim() + "&pn=" + encodeURIComponent(s.bizName) + "&am=" + due.toFixed(2) + "&cu=INR&tn=" + encodeURIComponent(no);
+    const q = qrcode(0, "M"); q.addData(uri); q.make();
+    return `<div style="margin-top:14px;display:flex;gap:12px;align-items:center"><img src="${q.createDataURL(4, 1)}" width="104" height="104" alt="UPI QR"><div style="font-size:12px"><b>Scan to pay ${inr(due)}</b><br>UPI: ${esc(s.upi)}<br>any UPI app</div></div>`;
+  } catch (e) { return ""; }
+}
+
+/* ---- Outstanding & ageing ---- */
+function ageRows(side) {
+  const AL = allocAll(), docs = side === "recv" ? db.sales : db.purchases, asOn = Date.parse(today());
+  return db.parties.map(p => {
+    const b = [0, 0, 0, 0], list = [];
+    docs.filter(d => d.partyId === p.id).forEach(d => {
+      const a = AL.inv[d.id]; if (!a || a.due < 0.5) return;
+      const age = Math.max(0, Math.floor((asOn - Date.parse(d.date)) / 864e5)); b[age <= 30 ? 0 : age <= 60 ? 1 : age <= 90 ? 2 : 3] += a.due; list.push({d, due: a.due, age});
+    });
+    const o = AL.open[side][p.id] || 0; if (o > 0.5) b[3] += o;
+    return {p, b: b.map(r2), total: r2(sum(b, x => x)), list, open: o};
+  }).filter(r => r.total > 0.5).sort((x, y) => y.total - x.total);
+}
+function setOS(v) { Q.os = v; render(); }
+PAGES.outstanding = () => {
+  const side = Q.os || "recv", rows = ageRows(side), t = [0, 1, 2, 3].map(i => r2(sum(rows, r => r.b[i]))), tot = r2(sum(t, x => x));
+  return {
+    title: "Outstanding & Ageing", sub: "Who owes you (or whom you owe), grouped by invoice age · as on " + fdate(today()), noFy: true,
+    actions: btn("Receivable", "setOS('recv')", side === "recv") + btn("Payable", "setOS('pay')", side === "pay") + btn("CSV", "ageCsv()"),
+    body: `<div class="stats">${statCard(side === "recv" ? "Total to receive" : "Total to pay", inr(tot), rows.length + " parties")}${statCard("0–30 days", inr(t[0]))}${statCard("31–90 days", inr(t[1] + t[2]))}${statCard("Over 90 days / opening", inr(t[3]))}</div>
+    <div class="panel"><div class="tw"><table><thead><tr>${heads(["Party", ["0–30", "r"], ["31–60", "r"], ["61–90", "r"], ["90+ / Opening", "r"], ["Total due", "r"], ""])}</tr></thead><tbody>${rows.length ? rows.map(r => `<tr><td><b>${esc(r.p.name)}</b>${r.p.phone ? `<small>${esc(r.p.phone)}</small>` : ""}</td>${r.b.map(v => `<td class="r">${v > 0.5 ? inr(v) : "—"}</td>`).join("")}<td class="r"><b>${inr(r.total)}</b></td><td class="act">${side === "recv" ? `<a onclick="remindParty('${r.p.id}')">Remind</a>` : ""}<a onclick="ledger('${r.p.id}')">Ledger</a></td></tr>`).join("") + `<tr><td><b>Total</b></td>${t.map(v => `<td class="r"><b>${inr(v)}</b></td>`).join("")}<td class="r"><b>${inr(tot)}</b></td><td></td></tr>` : `<tr><td class="empty" colspan="7">Nothing outstanding 🎉</td></tr>`}</tbody></table></div></div>`
+  };
+};
+function ageCsv() {
+  const side = Q.os || "recv", rows = ageRows(side);
+  download(CLIENT_NAME + "_outstanding_" + side + "_" + today() + ".csv", "\ufeff" + [["Party", "Phone", "0-30", "31-60", "61-90", "90+/Opening", "Total"], ...rows.map(r => [r.p.name, r.p.phone, ...r.b, r.total])].map(r => r.map(csvq).join(",")).join("\r\n"), "text/csv");
+}
+function remindParty(pid) {
+  if (!ck("outstanding", 1)) return;
+  const r = ageRows("recv").find(x => x.p.id === pid); if (!r) return;
+  const s = S(), list = r.list.map(x => `• ${x.d.no} (${fdate(x.d.date)}): ${inr(x.due)}`).join("\n") + (r.open > 0.5 ? `\n• Opening balance: ${inr(r.open)}` : "");
+  const msg = fillTpl(s.tplReminder || DEF_TPL.reminder, {party: r.p.name, business: s.bizName, balance: inr(r.total), list, phone: s.phone || "us", upi: s.upi ? "\nPay via UPI: " + s.upi : ""});
+  openModal("Payment reminder — " + esc(r.p.name), `<label>WhatsApp message (edit if needed)</label><textarea id="rm_msg" rows="11">${esc(msg)}</textarea><p class="note" style="margin-top:8px">${r.p.phone ? "To: " + esc(r.p.phone) : "No phone saved for this party — add one under Parties."}</p>`, "Open WhatsApp", () => { openWaChat(r.p.phone, $("rm_msg").value); closeModal(); });
+}
+
+/* ---- Cash book & day end ---- */
+const isCash = m => m === "Cash";
+function cbTx(from, to) {
+  const t = [];
+  db.receipts.forEach(v => { if (inR(v.date, from, to)) t.push({date: v.date, kind: "Receipt", no: v.no, who: pname(v.partyId), mode: v.mode, inn: num(v.amount), out: 0}); });
+  db.payments.forEach(v => { if (inR(v.date, from, to)) t.push({date: v.date, kind: "Payment", no: v.no, who: pname(v.partyId), mode: v.mode, inn: 0, out: num(v.amount)}); });
+  db.entries.forEach(e => { if (inR(e.date, from, to)) { const cin = e.kind === "capital"; t.push({date: e.date, kind: KIND_LBL[e.kind] || e.kind, no: "", who: e.head || "", mode: e.mode, inn: cin ? num(e.amount) : 0, out: cin ? 0 : num(e.amount)}); } });
+  return t;
+}
+function cbOpen(dt) {
+  const prev = cbTx("0000-00-00", dayBefore(dt)); let cash = num(S().openingCash) - num(S().openingBank), bank = num(S().openingBank);
+  prev.forEach(x => { if (isCash(x.mode)) cash += x.inn - x.out; else bank += x.inn - x.out; });
+  return {cash: r2(cash), bank: r2(bank)};
+}
+function dayData(dt) {
+  const o = cbOpen(dt), tx = cbTx(dt, dt), sl = db.sales.filter(d => d.date === dt), pu = db.purchases.filter(d => d.date === dt), ex = db.entries.filter(e => e.date === dt && e.kind === "expense");
+  const agg = a => ({n: a.length, taxable: r2(sum(a, d => docCalc(d).taxable)), tax: r2(sum(a, d => docCalc(d).tax)), total: r2(sum(a, d => docCalc(d).total))});
+  const cIn = r2(sum(tx.filter(x => isCash(x.mode)), x => x.inn)), cOut = r2(sum(tx.filter(x => isCash(x.mode)), x => x.out));
+  const bIn = r2(sum(tx.filter(x => !isCash(x.mode)), x => x.inn)), bOut = r2(sum(tx.filter(x => !isCash(x.mode)), x => x.out));
+  const rec = tx.filter(x => x.kind === "Receipt"), byMode = {}; rec.forEach(x => { byMode[x.mode] = r2((byMode[x.mode] || 0) + x.inn); });
+  const AL = allocAll(); let recv = 0, pay = 0; db.parties.forEach(p => { recv += (AL.open.recv[p.id] || 0); pay += (AL.open.pay[p.id] || 0); }); db.sales.forEach(d => { recv += AL.inv[d.id].due; }); db.purchases.forEach(d => { pay += AL.inv[d.id].due; });
+  return {dt, o, tx, sales: agg(sl), purch: agg(pu), exp: r2(sum(ex, e => num(e.amount))), cIn, cOut, bIn, bOut, cClose: r2(o.cash + cIn - cOut), bClose: r2(o.bank + bIn - bOut), recTotal: r2(sum(rec, x => x.inn)), byMode, recv: r2(recv), pay: r2(pay), low: lowItems().length};
+}
+function setCB(v) { Q.cb = v; render(); }
+function shiftCB(n) { const d = new Date(Date.parse(Q.cb || today()) + n * 864e5); setCB(d.toISOString().slice(0, 10)); }
+PAGES.cashbook = () => {
+  const dt = Q.cb || today(), D = dayData(dt);
+  return {
+    title: "Cash Book & Day End", sub: "Cash and bank movement with a one-page summary for the day", noFy: true,
+    actions: `<button class="btn" onclick="shiftCB(-1)">‹</button><input type="date" value="${dt}" style="width:auto" onchange="setCB(this.value)"><button class="btn" onclick="shiftCB(1)">›</button>` + btn("Print", "printDay()") + btn("WhatsApp summary", "waDay()") + btn("CSV", "dayCsv()"),
+    body: `<div class="stats">${statCard("Opening cash", inr(D.o.cash))}${statCard("Cash in", inr(D.cIn))}${statCard("Cash out", inr(D.cOut))}${statCard("Closing cash", inr(D.cClose))}</div>
+    <div class="stats">${statCard("Opening bank / UPI", inr(D.o.bank))}${statCard("Bank in", inr(D.bIn))}${statCard("Bank out", inr(D.bOut))}${statCard("Closing bank / UPI", inr(D.bClose))}</div>
+    <div class="panel"><h3>Transactions · ${fdate(dt)}</h3><div class="tw"><table><thead><tr>${heads(["Type", "Details", "Mode", ["In", "r"], ["Out", "r"]])}</tr></thead><tbody>${D.tx.length ? D.tx.map(x => `<tr><td><span class="pill">${esc(x.kind)}</span></td><td>${esc(x.who)}${x.no ? `<small>${esc(x.no)}</small>` : ""}</td><td>${esc(x.mode)}</td><td class="r">${x.inn ? inr(x.inn) : "—"}</td><td class="r">${x.out ? inr(x.out) : "—"}</td></tr>`).join("") : `<tr><td class="empty" colspan="5">No cash or bank movement on this day</td></tr>`}</tbody></table></div></div>
+    <div class="panel"><h3>Day-end summary</h3><div class="tw"><table><tbody>
+    <tr><td>Sales (${D.sales.n} invoices)</td><td class="r"><b>${inr(D.sales.total)}</b><small>${inr(D.sales.taxable)} + GST ${inr(D.sales.tax)}</small></td></tr>
+    <tr><td>Purchases (${D.purch.n} bills)</td><td class="r"><b>${inr(D.purch.total)}</b></td></tr>
+    <tr><td>Collected today</td><td class="r"><b>${inr(D.recTotal)}</b><small>${Object.entries(D.byMode).map(([m, v]) => m + " " + inr(v)).join(" · ") || "—"}</small></td></tr>
+    <tr><td>Expenses</td><td class="r"><b>${inr(D.exp)}</b></td></tr>
+    <tr><td>Total outstanding to receive</td><td class="r"><b>${inr(D.recv)}</b></td></tr>
+    <tr><td>Total outstanding to pay</td><td class="r"><b>${inr(D.pay)}</b></td></tr>
+    <tr><td>Low-stock items</td><td class="r"><b>${D.low}</b></td></tr></tbody></table></div></div>`
+  };
+};
+function dayText(D) {
+  const s = S();
+  return `*${s.bizName} — Day end summary*\nDate: ${fdate(D.dt)}\n\nSales: ${D.sales.n} invoices · ${inr(D.sales.total)}\nPurchases: ${D.purch.n} bills · ${inr(D.purch.total)}\nCollected: ${inr(D.recTotal)}${Object.keys(D.byMode).length ? " (" + Object.entries(D.byMode).map(([m, v]) => m + " " + inr(v)).join(", ") + ")" : ""}\nExpenses: ${inr(D.exp)}\n\nClosing cash: ${inr(D.cClose)}\nClosing bank/UPI: ${inr(D.bClose)}\n\nTo receive: ${inr(D.recv)}\nTo pay: ${inr(D.pay)}\nLow-stock items: ${D.low}`;
+}
+function waDay() { if (!ck("cashbook", 1)) return; const D = dayData(Q.cb || today()); openModal("Day-end summary on WhatsApp", `<label>Message</label><textarea id="dy_msg" rows="14">${esc(dayText(D))}</textarea><p class="note" style="margin-top:8px">${S().phone ? "Will open a chat with " + esc(S().phone) + " (your business number). Change it in Settings, or just copy the text." : "Add your phone in Settings to open your own chat — or copy the text."}</p>`, "Open WhatsApp", () => { openWaChat(S().phone, $("dy_msg").value); closeModal(); }); }
+function printDay() {
+  const D = dayData(Q.cb || today()), s = S(), r = (a, b) => `<tr><td>${a}</td><td class="r"><b>${b}</b></td></tr>`;
+  printHtml(`<div class="paper"><div class="hd"><div><h2>${esc(s.bizName)}</h2></div><div><div class="ttl">DAY-END SUMMARY</div><div style="text-align:right;margin-top:8px"><b>Date:</b> ${fdate(D.dt)}</div></div></div>
+  <table><tbody>${r("Sales (" + D.sales.n + " invoices)", inr(D.sales.total))}${r("Purchases (" + D.purch.n + " bills)", inr(D.purch.total))}${r("Collected today", inr(D.recTotal))}${r("Expenses", inr(D.exp))}${r("Opening cash", inr(D.o.cash))}${r("Cash in / out", inr(D.cIn) + " / " + inr(D.cOut))}${r("Closing cash", inr(D.cClose))}${r("Opening bank / UPI", inr(D.o.bank))}${r("Bank in / out", inr(D.bIn) + " / " + inr(D.bOut))}${r("Closing bank / UPI", inr(D.bClose))}${r("Total to receive", inr(D.recv))}${r("Total to pay", inr(D.pay))}</tbody></table>
+  <h3 style="margin:18px 0 6px">Transactions</h3><table><thead><tr><th>Type</th><th>Details</th><th>Mode</th><th class="r">In</th><th class="r">Out</th></tr></thead><tbody>${D.tx.map(x => `<tr><td>${esc(x.kind)}</td><td>${esc(x.who)} ${esc(x.no)}</td><td>${esc(x.mode)}</td><td class="r">${x.inn ? inr(x.inn) : "—"}</td><td class="r">${x.out ? inr(x.out) : "—"}</td></tr>`).join("") || `<tr><td colspan="5">No movement</td></tr>`}</tbody></table>
+  <div class="pf">Powered by ${FOOTER_BRAND}</div></div>`);
+}
+function dayCsv() {
+  const D = dayData(Q.cb || today());
+  download(CLIENT_NAME + "_cashbook_" + D.dt + ".csv", "\ufeff" + [["Date", "Type", "Details", "Ref", "Mode", "In", "Out"], ...D.tx.map(x => [fdate(D.dt), x.kind, x.who, x.no, x.mode, x.inn, x.out])].map(r => r.map(csvq).join(",")).join("\r\n"), "text/csv");
+}
+
+/* ---- dashboard extras ---- */
+function dashExtra() {
+  const rows = ageRows("recv"), overdue = r2(sum(rows, r => r.b[1] + r.b[2] + r.b[3])), AL = allocAll(), unpaid = db.sales.filter(d => AL.inv[d.id].due >= 0.5).length;
+  const todayRec = r2(sum(db.receipts.filter(v => v.date === today()), v => num(v.amount)));
+  return `<div class="stats">${statCard("Overdue (30+ days)", inr(overdue), `<a style="cursor:pointer" onclick="setPage('outstanding')">see ageing →</a>`)}${statCard("Unpaid invoices", unpaid)}${statCard("Collected today", inr(todayRec))}${statCard("Low-stock items", lowItems().length, lowItems().length ? `<a style="cursor:pointer" onclick="setPage('items');Q.low='1';render()">view →</a>` : "all good")}</div>`;
+}
+
 /* ---------------- boot ---------------- */
 document.addEventListener("keydown", e => { if (e.key === "Escape" && $("layer").innerHTML) closeModal(); });
 $("saved").textContent = "Consultancy";
+restoreUser();
 render();
-if (S().pin) showLock();
+if (db.users.length) ensureLogin(); else if (S().pin) showLock();
 initSync();
 </script>
 </body>
