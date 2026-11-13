@@ -1653,7 +1653,8 @@ async function bkPdfRows(buf) {
   await ensurePdfJs();
   const pdf = await pdfjsLib.getDocument({data: new Uint8Array(buf)}).promise;
   const out = [["Date", "Description", "Debit", "Credit", "Balance"]], DT = /^\d{1,2}[-\/][A-Za-z0-9]{2,3}[-\/]\d{2,4}$/, AM = /^-?[\d,]+\.\d{2}$/;
-  const SKIP = /Page \d+ of \d+|REGISTERED OFFICE|STATEMENT OF ACCOUNT/i, STOP = /End of the statement|GRIEVANCE|COMMONLY USED|IMPORTANT/i;
+  const SKIP = /Page No|Page \d+ of \d+|REGISTERED OFFICE|STATEMENT OF ACCOUNT/i, STOP = /End of the statement|GRIEVANCE|COMMONLY USED|IMPORTANT|STATEMENT SUMMARY|computer generated|Generated (on|by)/i;
+  const isDe = t => /^(debit|withdrawals?|dr)(\s*amt\.?|\s*amount)?$/i.test(t), isCr = t => /^(credit|deposits?|cr)(\s*amt\.?|\s*amount)?$/i.test(t), isBal = t => /^(closing\s*)?balance$/i.test(t);
   let cols = null, cur = null, prev = null, stop = false;
   const flush = () => {
     if (!cur) return;
@@ -1662,29 +1663,29 @@ async function bkPdfRows(buf) {
     out.push([cur.date, cur.desc.join(" ").replace(/\s+/g, " ").trim(), de || "", cr || "", cur.bal == null ? "" : cur.bal]);
     if (cur.bal != null) prev = cur.bal; cur = null;
   };
+  const cellsOf = L => { const c = []; L.it.forEach(i => { const p = c[c.length - 1]; if (p && i.x - p.r < 12) { p.s += " " + i.s; p.r = i.r; } else c.push({s: i.s, x: i.x, r: i.r}); }); return c; };
   for (let pn = 1; pn <= pdf.numPages && !stop; pn++) {
     const tc = await (await pdf.getPage(pn)).getTextContent();
     const items = tc.items.filter(i => i.str.trim()).map(i => ({s: i.str.trim(), x: i.transform[4], r: i.transform[4] + i.width, y: i.transform[5]}));
     const lines = []; items.sort((a, b) => b.y - a.y);
     items.forEach(it => { let L = lines.find(l => Math.abs(l.y - it.y) <= 2.5); if (!L) { L = {y: it.y, it: []}; lines.push(L); } L.it.push(it); });
     lines.sort((a, b) => b.y - a.y); lines.forEach(L => L.it.sort((a, b) => a.x - b.x));
-    const F = (re, ref) => items.find(i => re.test(i.s) && (!ref || Math.abs(i.y - ref.y) < 16));
-    const dh = items.find(i => /^debit$/i.test(i.s) && items.some(j => /^credit$/i.test(j.s) && Math.abs(j.y - i.y) < 3) && items.some(j => /^balance$/i.test(j.s) && Math.abs(j.y - i.y) < 3));
-    if (dh) {
-      const ch = F(/^credit$/i, dh), bh = F(/^balance$/i, dh), ph = F(/^particulars$/i, dh), kh = F(/^cheque$/i, dh), nh = F(/^date$/i, dh), vh = F(/^value\s*date$/i, dh);
-      if (ph) cols = {y: dh.y, de: dh.r, cr: ch.r, bal: bh.r, px: vh ? vh.r + 2 : ph.x - 60, kx: kh ? kh.x - 4 : dh.x - 90, dx: nh ? nh.x - 4 : 0};
-    }
+    const hdr = lines.map(L => { const c = cellsOf(L), d = c.find(x => isDe(x.s)), k = c.find(x => isCr(x.s)), b = c.find(x => isBal(x.s)); return d && k && b ? {L, c, d, k, b} : null; }).find(Boolean);
+    let inTable = !hdr && !!cols;
+    if (hdr) { const ck2 = hdr.c.find(x => /^(cheque|chq)/i.test(x.s)); cols = {de: hdr.d.r, cr: hdr.k.r, bal: hdr.b.r, kx: ck2 ? ck2.x - 4 : hdr.d.x - 130, px: 0}; }
     if (!cols) continue;
-    const top = dh ? dh.y : Infinity;
     for (const L of lines) {
-      if (L.y >= top - 1 && dh) continue;
+      if (hdr) { if (L === hdr.L) { inTable = true; continue; } if (!inTable) continue; }
       const txt = L.it.map(i => i.s).join(" ");
       if (STOP.test(txt)) { flush(); stop = true; break; }
-      if (SKIP.test(txt) || /^(Transaction|Value|Date|Particulars|Cheque|No|Debit|Credit|Balance)(\s|$)/.test(txt) && L.it.every(i => /^(Transaction|Value|Date|Particulars|Cheque|No|Debit|Credit|Balance)$/i.test(i.s))) continue;
-      const dates = L.it.filter(i => i.x < cols.px && DT.test(i.s)), amts = L.it.filter(i => i.x >= cols.kx && AM.test(i.s)), part = L.it.filter(i => i.x >= cols.px && i.x < cols.kx);
+      if (SKIP.test(txt)) continue;
+      if (L.it.every(i => /^(Transaction|Value|Date|Dt|Particulars|Narration|Cheque|Chq|No|Debit|Credit|Balance|Withdrawal|Deposit|Closing|Amt)\W*$/i.test(i.s))) continue;
+      const dates = L.it.filter(i => i.x < cols.kx && DT.test(i.s)), amts = L.it.filter(i => i.x >= cols.kx && AM.test(i.s));
+      if (dates.length) cols.px = Math.max(...dates.map(d => d.r)) + 2;
+      const part = L.it.filter(i => i.x >= cols.px && i.x < cols.kx && !DT.test(i.s));
       if (/^Opening Balance/i.test(part.map(i => i.s).join(" "))) { const a = amts.find(i => Math.abs(i.r - cols.bal) < 40); if (a) prev = bkBal(a.s); continue; }
       if (dates.length) {
-        flush(); cur = {date: dates[0].s, desc: [], de: 0, cr: 0, bal: null};
+        flush(); const dd = dates.slice().sort((a, b) => a.x - b.x)[0]; cur = {date: dd.s, desc: [], de: 0, cr: 0, bal: null};
         amts.forEach(a => { const d = [["de", cols.de], ["cr", cols.cr], ["bal", cols.bal]].sort((p, q) => Math.abs(a.r - p[1]) - Math.abs(a.r - q[1]))[0][0]; if (d === "bal") cur.bal = bkBal(a.s); else cur[d] = bkAmt(a.s); });
       }
       if (cur && part.length) cur.desc.push(part.map(i => i.s).join(" "));
