@@ -760,7 +760,7 @@ PAGES.items = () => {
   CUR = () => db.items.filter(i => match(i.name, i.hsn)).map(i => { const q = stockQty(i.id, "9999-12-31"); return `<tr><td><b>${esc(i.name)}</b></td><td>${esc(i.hsn) || "—"}</td><td class="r">${i.gst}%</td><td class="r">${inr(i.saleRate)}</td><td class="r">${inr(i.costRate)}</td><td class="r"><b class="${q < 0 ? "cr" : ""}">${q} ${esc(i.unit)}</b></td><td class="act"><a onclick="itemForm('${i.id}')">Edit</a><a class="del" onclick="delItemMaster('${i.id}')">Delete</a></td></tr>`; }).join("");
   return {
     title: "Items", sub: "Products and services with HSN/SAC, GST rate and live stock", noFy: true,
-    actions: btn("+ New Item", "itemForm()", true),
+    actions: btn("Bulk import", "importForm()") + btn("+ New Item", "itemForm()", true),
     body: `<div class="stats">${statCard("Items", db.items.length)}${statCard("Stock Value", inr(stockValue("9999-12-31")), "at cost rate")}${statCard("Out of stock", db.items.filter(i => stockQty(i.id, "9999-12-31") <= 0).length)}${statCard("Avg GST", db.items.length ? r2(sum(db.items, i => +i.gst) / db.items.length) + "%" : "—")}</div>` + listPanel(["Item", "HSN/SAC", ["GST", "r"], ["Sale rate", "r"], ["Cost rate", "r"], ["Stock", "r"], ""], "", "Search items…")
   };
 };
@@ -773,6 +773,98 @@ function itemForm(id) {
     save(); closeModal(); render(); toast("Saved");
   });
 }
+/* ---- Bulk import items ---- */
+let IMP = [];
+const IMP_HEAD = ["Item name", "HSN/SAC", "Unit", "GST %", "Sale rate (excl. GST)", "Cost rate", "Opening stock"];
+const csvq = v => '"' + String(v).replace(/"/g, '""') + '"';
+function itemTemplate() {
+  download(CLIENT_NAME + "_items_template.csv", "\ufeff" + [IMP_HEAD, ["Sample item", "1234", "Nos", "18", "100", "80", "10"], ["Sample service", "9987", "Nos", "18", "500", "0", "0"]].map(r => r.map(csvq).join(",")).join("\r\n"), "text/csv");
+}
+function parseDelim(text) {
+  text = text.replace(/^\ufeff/, "");
+  const first = text.split(/\r?\n/)[0] || "", d = first.includes("\t") ? "\t" : (first.split(";").length > first.split(",").length ? ";" : ",");
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === d) { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cell); rows.push(row); row = []; cell = ""; }
+    else cell += c;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+function impField(h) {
+  h = String(h).toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (/hsn|sac/.test(h)) return "hsn";
+  if (/open|stock|qty|quantity/.test(h)) return "openQty";
+  if (/sale|sell|mrp/.test(h)) return "saleRate";
+  if (/cost|purchase|buy/.test(h)) return "costRate";
+  if (/gst|tax/.test(h)) return "gst";
+  if (/unit|uom/.test(h)) return "unit";
+  if (/name|item|product|desc/.test(h)) return "name";
+  return "";
+}
+function buildImport(rows) {
+  rows = rows.filter(r => r.some(c => String(c == null ? "" : c).trim() !== ""));
+  if (rows.length < 2) return {err: "No data rows found. Use the template — first row must be the headings."};
+  const map = rows[0].map(impField);
+  if (!map.includes("name")) return {err: "Could not find an \"Item name\" column in the first row."};
+  const present = new Set(map.filter(Boolean)), seen = {}, out = [];
+  rows.slice(1).forEach((r, k) => {
+    const o = {}; map.forEach((f, i) => { if (f && o[f] === undefined) o[f] = String(r[i] == null ? "" : r[i]).trim(); });
+    const clean = s => num(String(s || "").replace(/[₹,\s]/g, ""));
+    const it = {name: o.name || "", hsn: o.hsn || "", unit: o.unit || "", gstRaw: (o.gst || "").replace(/[%\s]/g, ""), saleRate: clean(o.saleRate), costRate: clean(o.costRate), openQty: clean(o.openQty), has: o, line: k + 2};
+    let err = "";
+    if (!it.name) err = "Missing item name";
+    else if (it.gstRaw !== "" && !GST_RATES.includes(num(it.gstRaw))) err = "GST must be one of " + GST_RATES.join(", ");
+    else if ([it.saleRate, it.costRate].some(v => v < 0)) err = "Negative rate";
+    it.gst = it.gstRaw === "" ? null : num(it.gstRaw);
+    it.err = err;
+    if (!err) { const key = it.name.toLowerCase(); if (seen[key] != null) out[seen[key]].err = "Duplicate in file — later row used", out[seen[key]].dup = true; seen[key] = out.length; it.exists = db.items.find(x => x.name.trim().toLowerCase() === key) || null; }
+    out.push(it);
+  });
+  return {items: out, present};
+}
+function importForm() {
+  IMP = [];
+  openModal("Bulk import items", `<p class="note" style="margin-bottom:12px">Upload a CSV or Excel file (.csv, .xlsx). Items with the same name are <b>updated</b>; new names are added. Columns: ${IMP_HEAD.join(", ")}.</p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn" onclick="itemTemplate()">Download template</button><input type="file" id="imp_file" accept=".csv,.txt,.xlsx,.xls" onchange="impRead(this.files[0])"></div><div id="imp_out" style="margin-top:16px"></div>`, "Import", applyImport);
+}
+async function impRead(f) {
+  if (!f) return;
+  const out = $("imp_out"); out.innerHTML = '<p class="note">Reading file…</p>';
+  try {
+    let rows;
+    if (/\.xlsx?$/i.test(f.name)) {
+      if (!window.XLSX) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+      const wb = XLSX.read(await f.arrayBuffer(), {type: "array"});
+      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, defval: "", raw: false});
+    } else rows = parseDelim(await f.text());
+    const r = buildImport(rows);
+    if (r.err) { IMP = []; out.innerHTML = `<p class="note" style="color:var(--bad,#ff8a8a)">${esc(r.err)}</p>`; return; }
+    IMP = r.items.filter(i => !i.err);
+    const add = IMP.filter(i => !i.exists).length, upd = IMP.length - add, bad = r.items.filter(i => i.err);
+    out.innerHTML = `<div class="stats" style="margin:0 0 12px">${statCard("New", add)}${statCard("Update", upd)}${statCard("Skipped", bad.length)}</div>
+    <div class="tw" style="max-height:300px;overflow:auto"><table><thead><tr><th>Row</th><th>Item</th><th>HSN</th><th>GST</th><th class="r">Sale</th><th class="r">Cost</th><th class="r">Stock</th><th>Action</th></tr></thead><tbody>${r.items.slice(0, 300).map(i => `<tr><td>${i.line}</td><td>${esc(i.name)}</td><td>${esc(i.hsn) || "—"}</td><td>${i.gst == null ? "—" : i.gst + "%"}</td><td class="r">${inr(i.saleRate)}</td><td class="r">${inr(i.costRate)}</td><td class="r">${i.openQty}</td><td>${i.err ? `<span class="cr">${esc(i.err)}</span>` : i.exists ? "Update" : "New"}</td></tr>`).join("")}</tbody></table></div>${r.items.length > 300 ? `<p class="note">Showing first 300 of ${r.items.length} rows.</p>` : ""}`;
+    IMP.present = r.present;
+  } catch (e) { IMP = []; out.innerHTML = `<p class="note" style="color:#ff8a8a">Could not read the file: ${esc(e.message)}</p>`; }
+}
+function applyImport() {
+  if (!IMP.length) return toast("Choose a file with at least one valid row");
+  let add = 0, upd = 0;
+  IMP.forEach(i => {
+    if (i.exists) {
+      const t = db.items.find(x => x.id === i.exists.id), h = i.has;
+      if (h.hsn) t.hsn = i.hsn; if (h.unit) t.unit = i.unit; if (i.gst != null) t.gst = i.gst;
+      if (h.saleRate) t.saleRate = i.saleRate; if (h.costRate) t.costRate = i.costRate; if (h.openQty) t.openQty = i.openQty;
+      upd++;
+    } else { db.items.push({id: uid(), name: i.name, hsn: i.hsn, unit: i.unit || "Nos", gst: i.gst == null ? 18 : i.gst, saleRate: i.saleRate, costRate: i.costRate, openQty: i.openQty}); add++; }
+  });
+  save(); closeModal(); render(); toast(`Imported: ${add} added, ${upd} updated`);
+}
+
 function delItemMaster(id) {
   const used = [...db.sales, ...db.purchases].some(d => d.lines.some(l => l.itemId === id));
   if (used) return toast("Item is used in invoices and can't be deleted");
