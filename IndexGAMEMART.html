@@ -254,7 +254,7 @@ function defaults() {
       {id: "p_cash_c", name: "Cash Customer", gstin: "", state: "", phone: "", email: "", address: "", openType: "Dr", openAmt: 0},
       {id: "p_cash_s", name: "Cash Supplier", gstin: "", state: "", phone: "", email: "", address: "", openType: "Dr", openAmt: 0}
     ],
-    items: [], sales: [], purchases: [], receipts: [], payments: [], entries: [], users: []
+    items: [], sales: [], purchases: [], receipts: [], payments: [], entries: [], users: [], bank: {accts: ["Main account"], lines: [], rules: [], close: {}}
   };
 }
 function load() {
@@ -327,11 +327,12 @@ function pnl(from, to) {
   const ex = {};
   db.entries.filter(e => e.kind === "expense" && inR(e.date, from, to)).forEach(e => { ex[e.head] = r2((ex[e.head] || 0) + num(e.amount) - num(e.gst)); });
   const exTotal = r2(sum(Object.values(ex), v => v));
-  return {sales: r2(sales), purch: r2(purch), open, close, gp, ex, exTotal, net: r2(gp - exTotal)};
+  const oth = r2(sum(db.entries.filter(e => e.kind === "interest" && inR(e.date, from, to)), e => num(e.amount)));
+  return {sales: r2(sales), purch: r2(purch), open, close, gp, ex, exTotal, oth, net: r2(gp + oth - exTotal)};
 }
 function bsheet(asOn) {
   const all = "0000-00-00";
-  let cash = num(S().openingCash), intro = 0, draw = 0, gstPaid = 0, inEx = 0, expBase = 0;
+  let cash = num(S().openingCash), intro = 0, draw = 0, gstPaid = 0, inEx = 0, expBase = 0, othInc = 0, loan = 0;
   db.receipts.forEach(d => { if (d.date <= asOn) cash += num(d.amount); });
   db.payments.forEach(d => { if (d.date <= asOn) cash -= num(d.amount); });
   db.entries.forEach(e => {
@@ -341,6 +342,9 @@ function bsheet(asOn) {
     else if (e.kind === "gstpaid") { cash -= a; gstPaid += a; }
     else if (e.kind === "capital") { cash += a; intro += a; }
     else if (e.kind === "drawings") { cash -= a; draw += a; }
+    else if (e.kind === "interest") { cash += a; othInc += a; }
+    else if (e.kind === "loanin") { cash += a; loan += a; }
+    else if (e.kind === "loanout") { cash -= a; loan -= a; }
   });
   let debt = 0, cred = 0, openNet = 0;
   db.parties.forEach(p => {
@@ -353,12 +357,14 @@ function bsheet(asOn) {
   db.purchases.forEach(d => { if (d.date <= asOn) { const c = docCalc(d); inT += c.tax; pT += c.taxable; } });
   const gstNet = r2(outT - inT - gstPaid);
   const openCap = r2(num(S().openingCash) + stockBase + openNet);
-  const profit = r2(sT - pT - expBase + stock - stockBase);
+  const profit = r2(sT - pT - expBase + othInc + stock - stockBase);
   const capital = r2(openCap + profit + intro - draw);
   const liab = [["Capital Account", capital], ["Sundry Creditors", r2(cred)]];
   if (gstNet > 0) liab.push(["GST Payable (net)", gstNet]);
+  if (loan > 0.5) liab.push(["Loans", r2(loan)]);
   const assets = [["Cash & Bank", r2(cash)], ["Sundry Debtors", r2(debt)], ["Closing Stock", stock]];
   if (gstNet < 0) assets.push(["GST Input Credit (net)", r2(-gstNet)]);
+  if (loan < -0.5) assets.push(["Loans & advances given", r2(-loan)]);
   const tl = r2(sum(liab, x => x[1])), ta = r2(sum(assets, x => x[1]));
   return {liab, assets, tl, ta, openCap, profit, intro, draw, capital, cash: r2(cash), debt: r2(debt), cred: r2(cred), stock, gstNet};
 }
@@ -1030,7 +1036,7 @@ PAGES.pnl = () => {
   const r = range(), x = pnl(r.from, r.to);
   const html = `<div class="panel" id="plPaper"><h3>${esc(S().bizName)} — Trading & Profit and Loss Account</h3><p class="note" style="margin-bottom:12px">For the period ${fdate(r.from)} to ${fdate(r.to)}</p><div class="tw"><table class="st"><tbody>
    <tr class="h"><td colspan="2">Trading Account</td></tr>${stRow("Sales (excl. GST)", x.sales)}${stRow("Add: Closing stock", x.close)}${stRow("Less: Opening stock", -x.open)}${stRow("Less: Purchases (excl. GST)", -x.purch)}${stRow("Gross Profit", x.gp, "t")}
-   <tr class="h"><td colspan="2">Profit & Loss Account</td></tr>${stRow("Gross Profit b/f", x.gp)}${Object.keys(x.ex).sort().map(h => stRow("Less: " + esc(h), -x.ex[h])).join("")}${Object.keys(x.ex).length ? "" : `<tr><td class="i" colspan="2" style="color:var(--mut)">No expenses recorded</td></tr>`}${stRow("Net Profit / (Loss)", x.net, "t")}</tbody></table></div><div class="pf" style="display:none"></div></div>`;
+   <tr class="h"><td colspan="2">Profit & Loss Account</td></tr>${stRow("Gross Profit b/f", x.gp)}${x.oth ? stRow("Add: Interest & other income", x.oth) : ""}${Object.keys(x.ex).sort().map(h => stRow("Less: " + esc(h), -x.ex[h])).join("")}${Object.keys(x.ex).length ? "" : `<tr><td class="i" colspan="2" style="color:var(--mut)">No expenses recorded</td></tr>`}${stRow("Net Profit / (Loss)", x.net, "t")}</tbody></table></div><div class="pf" style="display:none"></div></div>`;
   return {title: "Profit & Loss", sub: "Trading account and profit statement", noFy: true, actions: btn("Export to KRN PL-BS", "exportPLBS()") + btn("Print", "printHtml(document.getElementById('plPaper').outerHTML)", true), body: rangeBar() + html};
 };
 
@@ -1056,7 +1062,7 @@ function plbsPayload() {
     client: {name: S().bizName, gstin: S().gstin, pan: S().pan, address: S().address, state: S().state},
     financialYear: fyLabel(fy), period: {from: a, to: b},
     trading: {sales: p.sales, purchases: p.purch, openingStock: p.open, closingStock: p.close, grossProfit: p.gp},
-    profitAndLoss: {expenses: Object.entries(p.ex).map(([head, amount]) => ({head, amount})), totalExpenses: p.exTotal, netProfit: p.net},
+    profitAndLoss: {otherIncome: p.oth, expenses: Object.entries(p.ex).map(([head, amount]) => ({head, amount})), totalExpenses: p.exTotal, netProfit: p.net},
     balanceSheet: {asOn: b, liabilities: s.liab.map(([head, amount]) => ({head, amount})), assets: s.assets.map(([head, amount]) => ({head, amount})), totalLiabilities: s.tl, totalAssets: s.ta,
       capital: {opening: s.openCap, netProfit: s.profit, introduced: s.intro, drawings: s.draw, closing: s.capital}}
   };
@@ -1155,7 +1161,7 @@ async function ghGet() {
 function applyRemote(g) {
   db = Object.assign(defaults(), g.data); GH.sha = g.sha; GH.pending = false; GH.store();
   try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { mem = JSON.stringify(db); }
-  db.users = db.users || []; render(); if (db.users.length) ensureLogin(); ghStatus("Synced to GitHub ✓ " + clock());
+  db.users = db.users || []; bankInit(); render(); if (db.users.length) ensureLogin(); ghStatus("Synced to GitHub ✓ " + clock());
 }
 function queueSync() {
   if (!GH.on()) return;
@@ -1452,7 +1458,7 @@ function cbTx(from, to) {
   const t = [];
   db.receipts.forEach(v => { if (inR(v.date, from, to)) t.push({date: v.date, kind: "Receipt", no: v.no, who: pname(v.partyId), mode: v.mode, inn: num(v.amount), out: 0}); });
   db.payments.forEach(v => { if (inR(v.date, from, to)) t.push({date: v.date, kind: "Payment", no: v.no, who: pname(v.partyId), mode: v.mode, inn: 0, out: num(v.amount)}); });
-  db.entries.forEach(e => { if (inR(e.date, from, to)) { const cin = e.kind === "capital"; t.push({date: e.date, kind: KIND_LBL[e.kind] || e.kind, no: "", who: e.head || "", mode: e.mode, inn: cin ? num(e.amount) : 0, out: cin ? 0 : num(e.amount)}); } });
+  db.entries.forEach(e => { if (inR(e.date, from, to)) { const cin = CR_KINDS.includes(e.kind); t.push({date: e.date, kind: KIND_LBL[e.kind] || e.kind, no: "", who: e.head || "", mode: e.mode, inn: cin ? num(e.amount) : 0, out: cin ? 0 : num(e.amount)}); } });
   return t;
 }
 function cbOpen(dt) {
@@ -1511,6 +1517,438 @@ function dashExtra() {
   const rows = ageRows("recv"), overdue = r2(sum(rows, r => r.b[1] + r.b[2] + r.b[3])), AL = allocAll(), unpaid = db.sales.filter(d => AL.inv[d.id].due >= 0.5).length;
   const todayRec = r2(sum(db.receipts.filter(v => v.date === today()), v => num(v.amount)));
   return `<div class="stats">${statCard("Overdue (30+ days)", inr(overdue), `<a style="cursor:pointer" onclick="setPage('outstanding')">see ageing →</a>`)}${statCard("Unpaid invoices", unpaid)}${statCard("Collected today", inr(todayRec))}${statCard("Low-stock items", lowItems().length, lowItems().length ? `<a style="cursor:pointer" onclick="setPage('items');Q.low='1';render()">view →</a>` : "all good")}</div>`;
+}
+
+PM.bankrec = "bankrec"; PRESETS.staff.bankrec = 0; PRESETS.accountant.bankrec = 3; PRESETS.view.bankrec = 1;
+MODS.splice(MODS.findIndex(m => m[0] === "backup"), 0, ["bankrec", "Bank Reconciliation"]);
+NAV[1][1].splice(2, 0, ["bankrec", "Bank Reconciliation", "rec"]);
+Object.assign(KIND_LBL, {interest: "Interest Received", loanin: "Loan Received", loanout: "Loan Repaid"});
+/* ============================================================
+   v10: bank statement import + reconciliation
+   ============================================================ */
+function bankInit() {
+  db.bank = db.bank || {};
+  const b = db.bank;
+  b.accts = b.accts && b.accts.length ? b.accts : ["Main account"];
+  b.lines = b.lines || []; b.rules = b.rules || []; b.close = b.close || {};
+}
+const BK = () => { bankInit(); return db.bank; };
+bankInit();
+const BANK_MODES = MODES.filter(m => m !== "Cash");
+const CR_KINDS = ["capital", "interest", "loanin"];
+const MONS = {jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12};
+const y4 = y => y < 100 ? 2000 + y : y;
+const ymd = (y, m, d) => (m < 1 || m > 12 || d < 1 || d > 31) ? "" : y + "-" + pad(m, 2) + "-" + pad(d, 2);
+function bkDate(s) {
+  s = String(s == null ? "" : s).trim(); if (!s) return "";
+  let m;
+  if (/^\d{5}(\.\d+)?$/.test(s)) return new Date(Math.round((+s - 25569) * 864e5)).toISOString().slice(0, 10);
+  if ((m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/))) return ymd(+m[1], +m[2], +m[3]);
+  if ((m = s.match(/^(\d{1,2})[-\/\. ]([A-Za-z]{3})[a-z]*[-\/\. ,]*(\d{2,4})/))) { const mo = MONS[m[2].toLowerCase()]; return mo ? ymd(y4(+m[3]), mo, +m[1]) : ""; }
+  if ((m = s.match(/^(\d{1,2})[-\/\.](\d{1,2})[-\/\.](\d{2,4})/))) return ymd(y4(+m[3]), +m[2], +m[1]);
+  return "";
+}
+const bkAmt = v => { const n = parseFloat(String(v == null ? "" : v).replace(/[₹,\s]|INR|Dr|Cr/gi, "")); return isNaN(n) ? 0 : Math.abs(n); };
+function bkBal(v) {
+  const s = String(v == null ? "" : v); if (!s.trim()) return null;
+  const n = parseFloat(s.replace(/[₹,\s]|INR|Dr|Cr/gi, "")); if (isNaN(n)) return null;
+  return /dr\b/i.test(s) ? -Math.abs(n) : n;
+}
+function bkMapCols(h) {
+  const m = {date: -1, desc: -1, debit: -1, credit: -1, bal: -1};
+  h.forEach((c, i) => {
+    const t = String(c).toLowerCase().replace(/[^a-z ]/g, " ").trim(); if (!t) return;
+    if (m.date < 0 && /date/.test(t) && !/value/.test(t)) m.date = i;
+    else if (m.desc < 0 && /narration|description|particular|remark|detail/.test(t)) m.desc = i;
+    else if (m.debit < 0 && /debit|withdraw|\bdr\b/.test(t)) m.debit = i;
+    else if (m.credit < 0 && /credit|deposit|\bcr\b/.test(t)) m.credit = i;
+    else if (m.bal < 0 && /balance/.test(t)) m.bal = i;
+  });
+  if (m.date < 0) h.forEach((c, i) => { if (m.date < 0 && /date/i.test(c)) m.date = i; });
+  return m;
+}
+function bkHeaderRow(rows) {
+  for (let i = 0; i < Math.min(rows.length, 40); i++) { const m = bkMapCols(rows[i]); if (m.date >= 0 && m.debit >= 0 && m.credit >= 0) return i; }
+  return 0;
+}
+const bkKey = (acct, l) => [acct, l.date, String(l.desc).toLowerCase(), l.debit, l.credit].join("|");
+let BI = null;
+function bankImport() {
+  if (!ck("bankrec", 2)) return;
+  BI = {rows: [], hi: 0, map: null};
+  openModal("Import bank statement", `<p class="note" style="margin-bottom:12px">Upload the statement from net banking: Excel (.xlsx), CSV, or PDF (text PDFs, not scanned photos). It needs a Date, Description, Debit and Credit column. Lines imported before are skipped, so overlapping statements are safe.</p>
+  <div class="grid">${fld("Bank account", `<select id="bi_acct" onchange="biAcct()">${opts(BK().accts)}<option value="__new">+ Add new account…</option></select>`)}<div id="bi_newW" style="display:none">${fld("New account name", `<input id="bi_new" placeholder="e.g. HDFC Current" oninput="biShow()">`)}</div></div>
+  <div style="margin-top:12px"><input type="file" id="bi_file" accept=".xlsx,.xls,.csv,.txt,.pdf" onchange="biRead(this.files[0])"></div><div id="bi_out" style="margin-top:14px"></div>`, "Import lines", bankApplyImport);
+}
+function biAcct() { $("bi_newW").style.display = val("bi_acct") === "__new" ? "" : "none"; biShow(); }
+const biAcctName = () => val("bi_acct") === "__new" ? val("bi_new") : val("bi_acct");
+async function biRead(f) {
+  if (!f) return;
+  const out = $("bi_out"); out.innerHTML = '<p class="note">Reading file…</p>';
+  try {
+    let rows;
+    if (/\.pdf$/i.test(f.name)) rows = await bkPdfRows(await f.arrayBuffer());
+    else if (/\.xlsx?$/i.test(f.name)) {
+      if (!window.XLSX) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+      const wb = XLSX.read(await f.arrayBuffer(), {type: "array"});
+      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, defval: "", raw: false});
+    } else rows = parseDelim(await f.text());
+    BI.rows = rows; BI.hi = bkHeaderRow(rows); BI.map = bkMapCols(rows[BI.hi] || []);
+    biShow();
+  } catch (e) { BI.rows = []; out.innerHTML = `<p class="note" style="color:#ff8a8a">Could not read the file: ${esc(e.message)}</p>`; }
+}
+function bkParse() {
+  const b = BI, m = b.map, out = [];
+  if (!b || m.date < 0 || m.debit < 0 || m.credit < 0) return out;
+  for (let i = b.hi + 1; i < b.rows.length; i++) {
+    const r = b.rows[i], dt = bkDate(r[m.date]); if (!dt) continue;
+    const de = bkAmt(r[m.debit]), cr = bkAmt(r[m.credit]); if (!de && !cr) continue;
+    out.push({date: dt, desc: m.desc >= 0 ? String(r[m.desc] == null ? "" : r[m.desc]).replace(/\s+/g, " ").trim() : "", debit: r2(de), credit: r2(cr), bal: m.bal >= 0 ? bkBal(r[m.bal]) : null});
+  }
+  return out;
+}
+function bkMark(parsed, acct) {
+  const have = {}, seen = {};
+  BK().lines.forEach(x => { const k = bkKey(x.acct, x); have[k] = (have[k] || 0) + 1; });
+  parsed.forEach(l => { const k = bkKey(acct, l); seen[k] = (seen[k] || 0) + 1; l.dup = seen[k] <= (have[k] || 0); });
+  return parsed;
+}
+function biShow() {
+  const out = $("bi_out"); if (!out || !BI || !BI.rows.length) return;
+  const b = BI, h = b.rows[b.hi] || [], m = b.map;
+  const sel = (label, key, optional) => `<div><label>${label}</label><select onchange="BI.map.${key}=+this.value;biShow()">${optional ? `<option value="-1">— none —</option>` : ""}${h.map((c, k) => `<option value="${k}" ${k === m[key] ? "selected" : ""}>${esc(String(c) || "Column " + (k + 1))}</option>`).join("")}</select></div>`;
+  const acct = biAcctName(), parsed = bkMark(bkParse(), acct), fresh = parsed.filter(x => !x.dup), dups = parsed.length - fresh.length;
+  const bad = m.date < 0 || m.debit < 0 || m.credit < 0;
+  out.innerHTML = `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">${sel("Date", "date")}${sel("Description", "desc", true)}${sel("Debit", "debit")}${sel("Credit", "credit")}${sel("Balance (optional)", "bal", true)}<div><label>Header row</label><input type="number" min="1" max="40" value="${b.hi + 1}" onchange="BI.hi=Math.max(0,(+this.value||1)-1);BI.map=bkMapCols(BI.rows[BI.hi]||[]);biShow()"></div></div>
+  ${bad ? `<p class="note" style="color:#ff8a8a;margin-top:10px">Pick the Date, Debit and Credit columns (or change the header row).</p>` : `
+  <div class="stats" style="margin:14px 0">${statCard("New lines", fresh.length)}${statCard("Already imported", dups)}${statCard("Debits", inr(sum(fresh, x => x.debit)))}${statCard("Credits", inr(sum(fresh, x => x.credit)))}</div>
+  <div class="tw" style="max-height:240px;overflow:auto"><table><thead><tr><th>Date</th><th>Description</th><th class="r">Debit</th><th class="r">Credit</th><th></th></tr></thead><tbody>${parsed.slice(0, 40).map(x => `<tr style="${x.dup ? "opacity:.5" : ""}"><td>${fdate(x.date)}</td><td>${esc(x.desc)}</td><td class="r">${x.debit ? inr(x.debit) : "—"}</td><td class="r">${x.credit ? inr(x.credit) : "—"}</td><td>${x.dup ? "skip" : ""}</td></tr>`).join("") || `<tr><td class="empty" colspan="5">No transaction rows found</td></tr>`}</tbody></table></div>${parsed.length > 40 ? `<p class="note">Showing the first 40 of ${parsed.length} rows.</p>` : ""}`}`;
+}
+function bankApplyImport() {
+  if (!ck("bankrec", 2)) return;
+  if (!BI || !BI.rows.length) return toast("Choose a statement file first");
+  const acct = biAcctName(); if (!acct) return toast("Enter the account name");
+  const parsed = bkMark(bkParse(), acct), fresh = parsed.filter(x => !x.dup);
+  if (!parsed.length) return toast("No transaction rows found — check the column mapping");
+  const b = BK(); if (!b.accts.includes(acct)) b.accts.push(acct);
+  fresh.forEach(x => b.lines.push({id: uid(), acct, date: x.date, desc: x.desc, debit: x.debit, credit: x.credit, st: "pending", links: []}));
+  const withBal = parsed.filter(x => x.bal != null);
+  if (withBal.length) {
+    const mx = withBal.reduce((a, x) => x.date > a ? x.date : a, ""), same = withBal.filter(x => x.date === mx), desc = parsed[0].date >= parsed[parsed.length - 1].date;
+    const pick = desc ? same[0] : same[same.length - 1], cur = b.close[acct];
+    if (!cur || cur.auto || mx >= cur.date) b.close[acct] = {date: mx, bal: pick.bal, auto: true};
+  }
+  save(); closeModal(); Q = {}; render(); toast(`Imported ${fresh.length} lines` + (parsed.length - fresh.length ? ` (${parsed.length - fresh.length} already there)` : ""));
+}
+
+
+/* ---- PDF statements (pdf.js, read by column position) ---- */
+let PDFJSP = null;
+function ensurePdfJs() {
+  if (window.pdfjsLib) return Promise.resolve();
+  if (!PDFJSP) PDFJSP = loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js").then(() => { pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }).catch(e => { PDFJSP = null; throw e; });
+  return PDFJSP;
+}
+async function bkPdfRows(buf) {
+  await ensurePdfJs();
+  const pdf = await pdfjsLib.getDocument({data: new Uint8Array(buf)}).promise;
+  const out = [["Date", "Description", "Debit", "Credit", "Balance"]], DT = /^\d{1,2}[-\/][A-Za-z0-9]{2,3}[-\/]\d{2,4}$/, AM = /^-?[\d,]+\.\d{2}$/;
+  const SKIP = /Page \d+ of \d+|REGISTERED OFFICE|STATEMENT OF ACCOUNT/i, STOP = /End of the statement|GRIEVANCE|COMMONLY USED|IMPORTANT/i;
+  let cols = null, cur = null, prev = null, stop = false;
+  const flush = () => {
+    if (!cur) return;
+    let de = cur.de, cr = cur.cr;
+    if (prev != null && cur.bal != null) { const d = r2(cur.bal - prev); if (d > 0.004) { cr = d; de = 0; } else if (d < -0.004) { de = -d; cr = 0; } }
+    out.push([cur.date, cur.desc.join(" ").replace(/\s+/g, " ").trim(), de || "", cr || "", cur.bal == null ? "" : cur.bal]);
+    if (cur.bal != null) prev = cur.bal; cur = null;
+  };
+  for (let pn = 1; pn <= pdf.numPages && !stop; pn++) {
+    const tc = await (await pdf.getPage(pn)).getTextContent();
+    const items = tc.items.filter(i => i.str.trim()).map(i => ({s: i.str.trim(), x: i.transform[4], r: i.transform[4] + i.width, y: i.transform[5]}));
+    const lines = []; items.sort((a, b) => b.y - a.y);
+    items.forEach(it => { let L = lines.find(l => Math.abs(l.y - it.y) <= 2.5); if (!L) { L = {y: it.y, it: []}; lines.push(L); } L.it.push(it); });
+    lines.sort((a, b) => b.y - a.y); lines.forEach(L => L.it.sort((a, b) => a.x - b.x));
+    const F = (re, ref) => items.find(i => re.test(i.s) && (!ref || Math.abs(i.y - ref.y) < 16));
+    const dh = items.find(i => /^debit$/i.test(i.s) && items.some(j => /^credit$/i.test(j.s) && Math.abs(j.y - i.y) < 3) && items.some(j => /^balance$/i.test(j.s) && Math.abs(j.y - i.y) < 3));
+    if (dh) {
+      const ch = F(/^credit$/i, dh), bh = F(/^balance$/i, dh), ph = F(/^particulars$/i, dh), kh = F(/^cheque$/i, dh), nh = F(/^date$/i, dh), vh = F(/^value\s*date$/i, dh);
+      if (ph) cols = {y: dh.y, de: dh.r, cr: ch.r, bal: bh.r, px: vh ? vh.r + 2 : ph.x - 60, kx: kh ? kh.x - 4 : dh.x - 90, dx: nh ? nh.x - 4 : 0};
+    }
+    if (!cols) continue;
+    const top = dh ? dh.y : Infinity;
+    for (const L of lines) {
+      if (L.y >= top - 1 && dh) continue;
+      const txt = L.it.map(i => i.s).join(" ");
+      if (STOP.test(txt)) { flush(); stop = true; break; }
+      if (SKIP.test(txt) || /^(Transaction|Value|Date|Particulars|Cheque|No|Debit|Credit|Balance)(\s|$)/.test(txt) && L.it.every(i => /^(Transaction|Value|Date|Particulars|Cheque|No|Debit|Credit|Balance)$/i.test(i.s))) continue;
+      const dates = L.it.filter(i => i.x < cols.px && DT.test(i.s)), amts = L.it.filter(i => i.x >= cols.kx && AM.test(i.s)), part = L.it.filter(i => i.x >= cols.px && i.x < cols.kx);
+      if (/^Opening Balance/i.test(part.map(i => i.s).join(" "))) { const a = amts.find(i => Math.abs(i.r - cols.bal) < 40); if (a) prev = bkBal(a.s); continue; }
+      if (dates.length) {
+        flush(); cur = {date: dates[0].s, desc: [], de: 0, cr: 0, bal: null};
+        amts.forEach(a => { const d = [["de", cols.de], ["cr", cols.cr], ["bal", cols.bal]].sort((p, q) => Math.abs(a.r - p[1]) - Math.abs(a.r - q[1]))[0][0]; if (d === "bal") cur.bal = bkBal(a.s); else cur[d] = bkAmt(a.s); });
+      }
+      if (cur && part.length) cur.desc.push(part.map(i => i.s).join(" "));
+    }
+  }
+  flush();
+  if (out.length < 2) throw new Error("No transactions found in this PDF — try the Excel/CSV download from net banking instead");
+  return out;
+}
+
+/* ---- status, suggestions ---- */
+const bkLinked = l => (l.links || []).filter(k => db[k.t] && db[k.t].some(x => x.id === k.id));
+const bkSt = l => bkLinked(l).length ? "cleared" : (l.st === "review" ? "review" : "pending");
+function bkUsed() { const s = new Set(); BK().lines.forEach(l => bkLinked(l).forEach(k => s.add(k.t + ":" + k.id))); return s; }
+const bkRecLabel = (t, x) => t === "receipts" ? "Receipt " + x.no + " · " + pname(x.partyId) : t === "payments" ? "Payment " + x.no + " · " + pname(x.partyId) : (KIND_LBL[x.kind] || x.kind) + " · " + (x.head || "");
+const bkIsBank = x => x.mode && x.mode !== "Cash";
+function bkBookRecs() {
+  const o = [];
+  db.receipts.forEach(x => o.push({t: "receipts", x, inn: num(x.amount), out: 0}));
+  db.payments.forEach(x => o.push({t: "payments", x, inn: 0, out: num(x.amount)}));
+  db.entries.forEach(x => { const c = CR_KINDS.includes(x.kind); o.push({t: "entries", x, inn: c ? num(x.amount) : 0, out: c ? 0 : num(x.amount)}); });
+  return o.filter(r => bkIsBank(r.x));
+}
+function bkCands(l) {
+  const cr = l.credit > 0, amt = cr ? l.credit : l.debit, used = bkUsed();
+  return bkBookRecs().filter(r => (cr ? r.inn > 0 : r.out > 0) && !used.has(r.t + ":" + r.x.id) && Math.abs((cr ? r.inn : r.out) - amt) < 0.5)
+    .map(r => ({t: r.t, id: r.x.id, date: r.x.date, label: bkRecLabel(r.t, r.x)}))
+    .sort((a, b) => Math.abs(Date.parse(a.date) - Date.parse(l.date)) - Math.abs(Date.parse(b.date) - Date.parse(l.date)));
+}
+function bkDue(partyId, type) {
+  const AL = allocAll(), docs = type === "sale" ? db.sales : db.purchases;
+  return docs.filter(d => d.partyId === partyId && AL.inv[d.id] && AL.inv[d.id].due >= 0.5).map(d => ({d, due: AL.inv[d.id].due})).sort((a, b) => a.d.date.localeCompare(b.d.date));
+}
+function bkSuggest(l) {
+  const low = l.desc.toLowerCase(), cr = l.credit > 0, amt = cr ? l.credit : l.debit, dir = cr ? "credit" : "debit", ty = cr ? "sale" : "purchase";
+  const near = bkCands(l).filter(c => Math.abs(Date.parse(c.date) - Date.parse(l.date)) <= 7 * 864e5);
+  if (near.length) return {type: "match", rec: near[0].t + ":" + near[0].id, ready: true, label: "Match " + near[0].label, why: "Same amount already entered"};
+  for (const r of BK().rules) if (r.dir === dir && r.text && low.includes(r.text)) {
+    const s = Object.assign({}, r.spec, {why: "Rule: " + r.text});
+    if (s.type === "sale" || s.type === "purchase") {
+      const m = bkDue(s.partyId, s.type).find(x => Math.abs(x.due - amt) < 0.5);
+      if (m) { s.invId = m.d.id; s.ready = true; } s.label = pname(s.partyId) + (m ? " · " + m.d.no : "");
+    } else { s.ready = true; s.label = (s.type === "expense" ? "Expense · " + (s.head || "") : KIND_LBL[s.type]); }
+    return s;
+  }
+  if (!cr && /\b(sms|chrg|charges?|chgs?|fees?|amc|penalty|min bal)/.test(low)) return {type: "expense", head: "Bank Charges", ready: true, label: "Expense · Bank Charges", why: "Looks like a bank charge"};
+  if (cr && /interest|\bint\.?\s*(pd|paid|cr)/.test(low)) return {type: "interest", ready: true, label: "Interest received", why: "Looks like interest"};
+  let best = null, bs = 0, tie = false;
+  const gen = /^(traders?|trading|enterprises?|stores?|agenc(y|ies)|company|industries|services?|sales|mart|cash|customer|supplier|private|limited|pvt)$/;
+  db.parties.forEach(p => {
+    if (p.id === "p_cash_c" || p.id === "p_cash_s") return;
+    const nm = p.name.toLowerCase().trim(); if (!nm) return;
+    const sc = (low.includes(nm) ? 3 : 0) + nm.split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !gen.test(w) && low.includes(w)).length;
+    if (sc > bs) { bs = sc; best = p; tie = false; } else if (sc === bs && sc > 0) tie = true;
+  });
+  if (best && !tie) {
+    const m = bkDue(best.id, ty).find(x => Math.abs(x.due - amt) < 0.5);
+    return {type: ty, partyId: best.id, invId: m ? m.d.id : "", ready: !!m, label: best.name + (m ? " · " + m.d.no : " · pick invoice"), why: "Name in description"};
+  }
+  const AL = allocAll(), docs = cr ? db.sales : db.purchases, hits = docs.filter(d => AL.inv[d.id] && Math.abs(AL.inv[d.id].due - amt) < 0.5);
+  if (hits.length === 1) return {type: ty, partyId: hits[0].partyId, invId: hits[0].id, ready: true, label: pname(hits[0].partyId) + " · " + hits[0].no, why: "Amount matches one open invoice"};
+  return null;
+}
+function bkGuess(desc) {
+  const skip = /^(upi|neft|imps|rtgs|ach|nach|pos|ecs|mob|ib|by|to|from|cr|dr|trf|transfer|payment|pmt|ref|chq|cheque|bank|ltd|limited|pvt|private)$/;
+  const t = String(desc).toLowerCase().split(/[^a-z]+/).filter(w => w.length >= 4 && !skip.test(w));
+  return t[0] || "";
+}
+
+/* ---- creating / undoing ---- */
+function bkClear(l, sp) {
+  const by = CU ? CU.name : "", mode = sp.mode || "Bank Transfer", note = sp.note || ("Bank: " + l.desc.slice(0, 60)), ref = (l.desc.match(/\d{9,}/) || [""])[0], links = [], amt = l.credit > 0 ? l.credit : l.debit;
+  const mkV = (kind, partyId, amount, invId) => { const v = {id: uid(), no: nextVNo(kind), date: l.date, partyId, amount: r2(amount), mode, ref, note, by}; if (invId) v.invId = invId; db[kind].push(v); links.push({t: kind, id: v.id, own: true}); };
+  const mkE = (kind, head, amount, gst) => { const e = {id: uid(), kind, date: l.date, head: head || KIND_LBL[kind], amount: r2(amount), gst: kind === "expense" ? r2(num(gst)) : 0, mode, note, by}; db.entries.push(e); links.push({t: "entries", id: e.id, own: true}); };
+  if (sp.type === "match") { const [t, id] = sp.rec.split(":"); links.push({t, id, own: false}); }
+  else if (sp.type === "sale" || sp.type === "purchase") {
+    const vk = sp.type === "sale" ? "receipts" : "payments"; let used = 0;
+    sp.rows.forEach(r => { if (num(r.amount) > 0) { mkV(vk, sp.partyId, num(r.amount), r.ref || ""); used += num(r.amount); } });
+    const rest = r2(amt - used); if (rest > 0.5) mkV(vk, sp.partyId, rest, "");
+  } else if (sp.type === "expense") sp.rows.forEach(r => mkE("expense", r.head, num(r.amount), r.gst));
+  else mkE(sp.type, sp.head, amt, 0);
+  l.links = links; l.st = "pending";
+  if (sp.remember && sp.rtext && sp.type !== "match") {
+    const b = BK(), dir = l.credit > 0 ? "credit" : "debit", text = sp.rtext.toLowerCase().trim();
+    const spec = {type: sp.type}; if (sp.partyId) spec.partyId = sp.partyId; if (sp.type === "expense" && sp.rows[0]) spec.head = sp.rows[0].head; if (sp.head) spec.head = sp.head;
+    b.rules = b.rules.filter(r => !(r.dir === dir && r.text === text)); b.rules.push({id: uid(), dir, text, spec});
+  }
+  save();
+}
+function bankAccept(id) {
+  if (!ck("bankrec", 2)) return;
+  const l = BK().lines.find(x => x.id === id); if (!l) return; const s = bkSuggest(l); if (!s || !s.ready) return bankAssign(id);
+  bkClear(l, bkSpec(l, s)); render(); toast("Cleared");
+}
+function bkSpec(l, s) {
+  const amt = l.credit > 0 ? l.credit : l.debit;
+  if (s.type === "match") return {type: "match", rec: s.rec};
+  if (s.type === "sale" || s.type === "purchase") return {type: s.type, partyId: s.partyId, mode: bkMode(l), rows: [{ref: s.invId || "", amount: amt}]};
+  if (s.type === "expense") return {type: "expense", mode: bkMode(l), rows: [{head: s.head || "Miscellaneous", amount: amt, gst: 0}]};
+  return {type: s.type, mode: bkMode(l), head: s.head || ""};
+}
+const bkMode = l => /\bupi\b/i.test(l.desc) ? "UPI" : /\bchq|cheque|\bclg\b/i.test(l.desc) ? "Cheque" : "Bank Transfer";
+function bankAcceptAll() {
+  if (!ck("bankrec", 2)) return;
+  const list = BK().lines.filter(l => bkSt(l) !== "cleared" && (!Q.ba || l.acct === Q.ba)).map(l => [l, bkSuggest(l)]).filter(x => x[1] && x[1].ready);
+  if (!list.length) return toast("No confident suggestions to accept");
+  if (!confirm(`Clear ${list.length} lines using the suggestions shown (matches, rules, bank charges, interest and exact invoice amounts)? You can undo each one.`)) return;
+  list.forEach(([l, s]) => bkClear(l, bkSpec(l, s))); render(); toast(list.length + " lines cleared");
+}
+function bankUndo(id) {
+  if (!ck("bankrec", 3)) return;
+  const l = BK().lines.find(x => x.id === id); if (!l) return; const ks = bkLinked(l);
+  if (!confirm("Undo this line? " + (ks.some(k => k.own) ? "The receipt/payment/entry created from it will be deleted." : "It will be un-matched (your existing entry stays).") )) return;
+  ks.forEach(k => { if (k.own) db[k.t] = db[k.t].filter(x => x.id !== k.id); });
+  l.links = []; save(); render(); toast("Line is pending again");
+}
+function bankReview(id) { const l = BK().lines.find(x => x.id === id); if (!l || !ck("bankrec", 2)) return; l.st = l.st === "review" ? "pending" : "review"; save(); render(); }
+function bankDel(id) {
+  if (!ck("bankrec", 3)) return;
+  const l = BK().lines.find(x => x.id === id); if (!l) return;
+  if (bkSt(l) === "cleared") return toast("Undo the line first");
+  if (confirm("Remove this statement line? (It only deletes the imported line.)")) { BK().lines = BK().lines.filter(x => x.id !== id); save(); render(); }
+}
+function bankRuleDel(id) { if (!ck("bankrec", 2)) return; BK().rules = BK().rules.filter(r => r.id !== id); save(); render(); }
+
+/* ---- assign modal ---- */
+let BA = null;
+const BA_TYPES = {
+  credit: [["sale", "Sale receipt"], ["match", "Match existing"], ["interest", "Interest"], ["capital", "Capital"], ["loanin", "Loan received"]],
+  debit: [["purchase", "Purchase payment"], ["match", "Match existing"], ["expense", "Expense"], ["bankchg", "Bank charges"], ["drawings", "Drawings"], ["loanout", "Loan repaid"], ["gstpaid", "GST paid to govt"]]
+};
+function bankAssign(id, pre) {
+  if (!ck("bankrec", 2)) return;
+  const l = BK().lines.find(x => x.id === id); if (!l) return;
+  const cr = l.credit > 0, amt = cr ? l.credit : l.debit, s = pre || bkSuggest(l) || {};
+  BA = {id, cr, amt, type: s.type || (cr ? "sale" : "purchase"), partyId: s.partyId || "", mode: bkMode(l), head: s.head || "", note: "", rec: s.rec || "", rows: [{ref: s.invId || "", amount: amt, head: s.head || "", gst: ""}], remember: false, rtext: bkGuess(l.desc)};
+  baRender();
+}
+function baSync() {
+  if (!BA) return; const g = id => $(id) ? $(id).value : null;
+  const f = (k, id) => { const v = g(id); if (v !== null) BA[k] = v; };
+  f("partyId", "ba_party"); f("mode", "ba_mode"); f("note", "ba_note"); f("rec", "ba_rec"); f("head", "ba_head"); f("rtext", "ba_rtext");
+  BA.rows.forEach((r, i) => { const a = g("ba_amt" + i), h = g("ba_rhead" + i), x = g("ba_gst" + i), v = g("ba_inv" + i); if (a !== null) r.amount = a; if (h !== null) r.head = h; if (x !== null) r.gst = x; if (v !== null) r.ref = v; });
+  if ($("ba_rem")) BA.remember = $("ba_rem").checked;
+}
+const BAFN = {
+  type(k) { if (k === "bankchg") { BA.type = "expense"; BA.head = "Bank Charges"; BA.rows = [{ref: "", amount: BA.amt, head: "Bank Charges", gst: ""}]; } else { BA.type = k; if (k === "expense" && BA.head === "Bank Charges") BA.head = ""; BA.rows = [{ref: "", amount: BA.amt, head: k === "expense" ? BA.head : "", gst: ""}]; if (k === "match" && !BA.rec) { const c = bkCands(BK().lines.find(x => x.id === BA.id)); BA.rec = c.length ? c[0].t + ":" + c[0].id : ""; } } },
+  party() { BA.rows = [{ref: "", amount: BA.amt, head: "", gst: ""}]; const m = bkDue(BA.partyId, BA.type).find(x => Math.abs(x.due - BA.amt) < 0.5); if (m) BA.rows[0].ref = m.d.id; },
+  inv(i, v) { const r = BA.rows[i]; r.ref = v; const left = r2(BA.amt - sum(BA.rows.filter((_, k) => k !== i), x => num(x.amount))); const d = bkDue(BA.partyId, BA.type).find(x => x.d.id === v); r.amount = d ? Math.max(0, Math.min(d.due, left)) : Math.max(0, left); },
+  add() { const left = r2(BA.amt - sum(BA.rows, x => num(x.amount))); BA.rows.push({ref: "", amount: left > 0 ? left : "", head: "", gst: ""}); },
+  del(i) { BA.rows.splice(i, 1); if (!BA.rows.length) BA.rows = [{ref: "", amount: BA.amt, head: "", gst: ""}]; }
+};
+function baDo(fn, ...a) { baSync(); BAFN[fn](...a); baRender(); }
+function baRender() {
+  const l = BK().lines.find(x => x.id === BA.id), T = BA.type, isBC = T === "expense" && BA.head === "Bank Charges" && BA.rows.length === 1;
+  const pills = BA_TYPES[BA.cr ? "credit" : "debit"].map(([k, lab]) => { const on = k === "bankchg" ? isBC : (T === k && !(k === "expense" && isBC)); return `<button class="btn ${on ? "pri" : ""}" style="padding:6px 12px;font-size:13px" onclick="baDo('type','${k}')">${lab}</button>`; }).join("");
+  let mid = "";
+  const used = sum(BA.rows, r => num(r.amount)), left = r2(BA.amt - used);
+  if (T === "sale" || T === "purchase") {
+    const due = BA.partyId ? bkDue(BA.partyId, T) : [];
+    mid = `<div class="grid">${fld(T === "sale" ? "Received from" : "Paid to", `<select id="ba_party" onchange="baDo('party')">${opts(db.parties.map(p => [p.id, p.name]), BA.partyId, "Select party…")}</select>`)}${fld("Mode", `<select id="ba_mode">${opts(BANK_MODES, BA.mode)}</select>`)}</div>
+    <div style="margin-top:14px"><label>${T === "sale" ? "Against invoice(s)" : "Against bill(s)"} — split the amount if needed</label>${BA.rows.map((r, i) => `<div style="display:flex;gap:8px;margin-top:8px;align-items:center"><select id="ba_inv${i}" onchange="baDo('inv',${i},this.value)" style="flex:1"><option value="">On account / advance</option>${due.map(x => `<option value="${x.d.id}" ${x.d.id === r.ref ? "selected" : ""}>${esc(x.d.no)} · ${fdate(x.d.date)} · due ${inr(x.due)}</option>`).join("")}</select><input type="number" step="any" id="ba_amt${i}" value="${r.amount}" style="width:130px" oninput="baSync();baRem()"><a style="cursor:pointer;padding:0 6px" onclick="baDo('del',${i})">✕</a></div>`).join("")}</div>
+    <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:13px"><a style="cursor:pointer" onclick="baDo('add')">+ Split to another invoice</a><span id="ba_left" class="note"></span></div>`;
+  } else if (T === "expense") {
+    mid = `<div class="grid">${fld("Mode", `<select id="ba_mode">${opts(BANK_MODES, BA.mode)}</select>`)}</div>
+    <div style="margin-top:14px"><label>Expense head(s) — split the amount if needed</label><datalist id="heads">${HEADS.map(h => `<option value="${h}">`).join("")}</datalist>${BA.rows.map((r, i) => `<div style="display:flex;gap:8px;margin-top:8px;align-items:center"><input id="ba_rhead${i}" list="heads" value="${esc(r.head)}" placeholder="Head" style="flex:1"><input type="number" step="any" id="ba_amt${i}" value="${r.amount}" style="width:120px" oninput="baSync();baRem()"><input type="number" step="any" id="ba_gst${i}" value="${r.gst}" placeholder="GST incl." style="width:100px"><a style="cursor:pointer;padding:0 6px" onclick="baDo('del',${i})">✕</a></div>`).join("")}</div>
+    <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:13px"><a style="cursor:pointer" onclick="baDo('add')">+ Split to another head</a><span id="ba_left" class="note"></span></div>`;
+  } else if (T === "match") {
+    const c = bkCands(l);
+    mid = c.length ? `<div class="grid">${fld("Existing entry with the same amount", `<select id="ba_rec">${c.map(x => `<option value="${x.t}:${x.id}" ${BA.rec === x.t + ":" + x.id ? "selected" : ""}>${fdate(x.date)} · ${esc(x.label)}</option>`).join("")}</select>`)}</div><p class="note" style="margin-top:8px">Links this bank line to the entry you already made. Nothing new is created.</p>` : `<p class="note">No unmatched UPI/bank entry of ${inr(BA.amt)} found. Choose another type to create one.</p>`;
+  } else {
+    mid = `<div class="grid">${fld("Mode", `<select id="ba_mode">${opts(BANK_MODES, BA.mode)}</select>`)}${fld("Head / description (optional)", `<input id="ba_head" value="${esc(BA.head)}" placeholder="${esc(KIND_LBL[T] || "")}">`)}</div>`;
+  }
+  const what = T === "sale" ? "receipts" : T === "purchase" ? "payments" : T === "match" ? "" : "an entry";
+  openModal("Assign bank line", `<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px"><span><b>${fdate(l.date)}</b> · ${esc(l.desc)}</span><b>${BA.cr ? "Credit " : "Debit "}${inr(BA.amt)}</b></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${pills}</div>${mid}
+  ${T === "match" ? "" : `<div class="grid" style="margin-top:14px">${fld("Note (optional)", `<input id="ba_note" value="${esc(BA.note)}" placeholder="Bank: ${esc(l.desc.slice(0, 30))}">`, "full")}</div>
+  <label style="display:flex;gap:10px;align-items:center;margin-top:14px;cursor:pointer;flex-wrap:wrap"><input type="checkbox" id="ba_rem" style="width:20px;height:20px;padding:0" ${BA.remember ? "checked" : ""}> Remember: next time, ${BA.cr ? "credits" : "debits"} containing <input id="ba_rtext" value="${esc(BA.rtext)}" style="width:150px"> → this</label>`}
+  <p class="note" style="margin-top:12px">${T === "match" ? "" : "Creates " + what + " dated " + fdate(l.date) + (T === "sale" || T === "purchase" ? ", linked to the invoice so its Paid status updates." : ".")}</p>`, "Clear line", baSave);
+  baRem();
+}
+function baRem() { const e = $("ba_left"); if (!e || !BA) return; const left = r2(BA.amt - sum(BA.rows, r => num(r.amount))); e.textContent = BA.type === "expense" ? (Math.abs(left) < 0.5 ? "Fully split ✓" : "Left to split: " + inr(left)) : (left > 0.5 ? "Remaining " + inr(left) + " saved as advance / on account" : Math.abs(left) < 0.5 ? "Fully allocated ✓" : "Over by " + inr(-left)); }
+function baSave() {
+  baSync(); const l = BK().lines.find(x => x.id === BA.id), T = BA.type, amt = BA.amt;
+  if (!l) return;
+  const sp = {type: T, mode: BA.mode || "Bank Transfer", note: BA.note.trim(), remember: BA.remember, rtext: BA.rtext};
+  if (T === "match") { if (!BA.rec) return toast("Pick the entry to match"); sp.rec = BA.rec; }
+  else if (T === "sale" || T === "purchase") {
+    if (!BA.partyId) return toast("Select a party");
+    const rows = BA.rows.filter(r => num(r.amount) > 0); if (!rows.length) return toast("Enter an amount");
+    if (sum(rows, r => num(r.amount)) > amt + 0.5) return toast("Allocated more than the bank amount");
+    sp.partyId = BA.partyId; sp.rows = rows.map(r => ({ref: r.ref, amount: num(r.amount)}));
+  } else if (T === "expense") {
+    const rows = BA.rows.filter(r => num(r.amount) > 0);
+    if (!rows.length || rows.some(r => !String(r.head).trim())) return toast("Enter a head for each amount");
+    if (Math.abs(sum(rows, r => num(r.amount)) - amt) > 0.5) return toast("Split must add up to " + inr(amt));
+    if (rows.some(r => num(r.gst) > num(r.amount))) return toast("GST cannot exceed the amount");
+    sp.rows = rows.map(r => ({head: String(r.head).trim(), amount: num(r.amount), gst: num(r.gst)}));
+  } else sp.head = BA.head.trim();
+  bkClear(l, sp); closeModal(); render(); toast("Line cleared");
+}
+
+/* ---- reconciliation maths ---- */
+function bkNextDay(d) { return new Date(Date.parse(d) + 864e5).toISOString().slice(0, 10); }
+function bkRecon() {
+  const b = BK(), dts = b.lines.map(l => l.date).sort(), first = dts[0] || "0000-00-00", cl = Object.values(b.close).map(c => c.date).filter(Boolean).sort();
+  const asOn = cl.length ? cl[cl.length - 1] : (dts.length ? dts[dts.length - 1] : today());
+  const hasClose = b.accts.some(a => b.close[a] && b.close[a].bal != null);
+  const stmt = r2(sum(b.accts, a => num((b.close[a] || {}).bal))), book = cbOpen(bkNextDay(asOn)).bank;
+  const pend = b.lines.filter(l => bkSt(l) !== "cleared" && l.date <= asOn), pendNet = r2(sum(pend, l => l.credit - l.debit));
+  const used = bkUsed(), unm = bkBookRecs().filter(r => !used.has(r.t + ":" + r.x.id) && r.x.date >= first && r.x.date <= asOn), unmNet = r2(sum(unm, r => r.inn - r.out));
+  const expected = r2(book + pendNet - unmNet);
+  return {asOn, hasClose, stmt, book, pend, pendNet, unm, unmNet, expected, diff: r2(stmt - expected)};
+}
+function bkClose(acct, v) { const b = BK(); b.close[acct] = {date: (b.close[acct] || {}).date || today(), bal: v === "" ? null : num(v), auto: false}; save(); render(); }
+
+/* ---- page ---- */
+PAGES.bankrec = () => {
+  const b = BK(), v = Q.bv || "pending", acct = Q.ba || "", all = b.lines.filter(l => !acct || l.acct === acct), multiA = b.accts.length > 1;
+  let pc = 0, pd = 0, nP = 0, nC = 0; all.forEach(l => { if (bkSt(l) === "cleared") nC++; else { nP++; pc += l.credit; pd += l.debit; } });
+  CUR = () => all.filter(l => { const s = bkSt(l); return (v === "all" || (v === "pending" ? s !== "cleared" : v === "review" ? s === "review" : s === "cleared")) && match(l.desc, String(l.credit || l.debit), l.acct); })
+    .sort((x, y) => y.date.localeCompare(x.date) || (y.id > x.id ? 1 : -1)).map(l => {
+      const s = bkSt(l), sg = s === "cleared" ? null : bkSuggest(l);
+      const st = s === "cleared" ? `<span class="pill" style="color:#7ee2a0">Cleared</span><small>${bkLinked(l).map(k => esc(bkRecLabel(k.t, db[k.t].find(x => x.id === k.id)))).join(" · ")}</small>`
+        : sg ? `<span class="pill" style="color:${sg.ready ? "#7ee2a0" : "#ffd27a"}">${esc(sg.label)}</span><small>${esc(sg.why)}</small>` : `<span class="pill">No match</span>`;
+      const act = s === "cleared" ? `<a class="del" onclick="bankUndo('${l.id}')">Undo</a>` : `${sg && sg.ready ? `<a class="ed" onclick="bankAccept('${l.id}')">Accept</a>` : ""}<a class="ed" onclick="bankAssign('${l.id}')">Assign</a><a class="ed" onclick="bankReview('${l.id}')">${s === "review" ? "Unflag" : "Review later"}</a><a class="del" onclick="bankDel('${l.id}')">Delete</a>`;
+      return `<tr><td>${fdate(l.date)}</td><td>${esc(l.desc)}${multiA ? `<small>${esc(l.acct)}</small>` : ""}${s === "review" ? `<small style="color:#ffd27a">Flagged for review</small>` : ""}</td><td class="r">${l.debit ? inr(l.debit) : "—"}</td><td class="r">${l.credit ? inr(l.credit) : "—"}</td><td>${st}</td><td class="act">${act}</td></tr>`;
+    }).join("");
+  const R = bkRecon(), tab = (k, t) => `<button class="btn ${v === k ? "pri" : ""}" onclick="Q.bv='${k}';render()">${t}</button>`;
+  const rules = b.rules.map(r => `<tr><td>${r.dir === "credit" ? "Credit" : "Debit"} contains <b>${esc(r.text)}</b></td><td>${esc(r.spec.type === "sale" || r.spec.type === "purchase" ? (r.spec.type === "sale" ? "Receipt · " : "Payment · ") + pname(r.spec.partyId) : r.spec.type === "expense" ? "Expense · " + (r.spec.head || "") : KIND_LBL[r.spec.type] || r.spec.type)}</td><td class="act"><a class="ed" onclick="bankRuleDel('${r.id}')">Delete</a></td></tr>`).join("");
+  return {
+    title: "Bank Reconciliation", sub: "Import the statement, then clear every line into a receipt, payment, expense or other entry", noFy: true,
+    actions: btn("Import statement", "bankImport()", true) + btn("Accept suggestions", "bankAcceptAll()") + btn("Report", "bankReport()") + btn("CSV", "bankCsv()"),
+    body: `<div class="stats">${statCard("Pending lines", nP, nP ? "to assign" : "all clear")}${statCard("Cleared lines", nC)}${statCard("Pending credits", inr(pc))}${statCard("Pending debits", inr(pd))}</div>
+    <div class="toolbar" style="margin-bottom:10px">${tab("pending", "Pending")}${tab("review", "Review")}${tab("cleared", "Cleared")}${tab("all", "All")}${multiA ? `<select onchange="Q.ba=this.value;render()"><option value="">All accounts</option>${b.accts.map(a => `<option ${a === acct ? "selected" : ""}>${esc(a)}</option>`).join("")}</select>` : ""}</div>` +
+    listPanel(["Date", "Description", ["Debit", "r"], ["Credit", "r"], "Suggestion / status", ""], "", "Search description or amount…") +
+    `<div class="panel"><h3>Closing balance check</h3>${bkReconHtml(R, true)}</div>
+    <div class="panel"><h3>Saved rules</h3>${rules ? `<div class="tw"><table><tbody>${rules}</tbody></table></div>` : `<p class="note">No rules yet. Tick "Remember" while assigning a line (for example TNEB → Electricity) and similar lines will be suggested next time.</p>`}</div>`
+  };
+};
+function bkReconHtml(R, edit) {
+  const b = BK(), row = (a, v, bold) => `<tr><td>${a}</td><td class="r">${bold ? "<b>" + v + "</b>" : v}</td></tr>`;
+  return `<div class="tw"><table><tbody>
+  ${b.accts.map(a => `<tr><td>Statement closing balance — ${esc(a)}${(b.close[a] || {}).date ? `<small>as on ${fdate(b.close[a].date)}${b.close[a].auto ? " · from statement" : ""}</small>` : ""}</td><td class="r">${edit ? `<input type="number" step="any" style="width:150px;text-align:right" value="${(b.close[a] || {}).bal == null ? "" : b.close[a].bal}" placeholder="Enter balance" onchange="bkClose(${esc(JSON.stringify(a)).replace(/"/g, "&quot;")},this.value)">` : (b.close[a] && b.close[a].bal != null ? inr(b.close[a].bal) : "—")}</td></tr>`).join("")}
+  ${row("Balance as per your books (bank / UPI) on " + fdate(R.asOn), inr(R.book))}
+  ${row("Add: statement lines not yet in your books (" + R.pend.length + ")", inr(R.pendNet))}
+  ${row("Less: book entries not found on the statement (" + R.unm.length + ")", inr(R.unmNet))}
+  ${row("Expected statement balance", inr(R.expected), true)}
+  ${R.hasClose ? row("Difference", `<span style="color:${Math.abs(R.diff) < 0.5 ? "#7ee2a0" : "#ff8a8a"}">${Math.abs(R.diff) < 0.5 ? "Reconciled ✓" : inr(R.diff)}</span>`, true) : row("Difference", "Enter the statement closing balance above")}
+  </tbody></table></div>${R.hasClose && Math.abs(R.diff) >= 0.5 ? `<p class="note" style="margin-top:10px">A difference usually means a missing line, a wrong amount, or an opening bank balance in Settings that doesn't match the statement.</p>` : ""}
+  ${R.unm.length ? `<p class="note" style="margin-top:10px">Entries in your books with no statement line: ${R.unm.slice(0, 6).map(r => esc(fdate(r.x.date) + " " + bkRecLabel(r.t, r.x) + " " + inr(r.inn || r.out))).join("; ")}${R.unm.length > 6 ? "…" : ""}</p>` : ""}`;
+}
+function bankReport() {
+  if (!ck("bankrec", 1)) return;
+  const R = bkRecon(), s = S();
+  printHtml(`<div class="paper"><div class="hd"><div><h2>${esc(s.bizName)}</h2></div><div><div class="ttl">BANK RECONCILIATION</div><div style="text-align:right;margin-top:8px"><b>As on:</b> ${fdate(R.asOn)}</div></div></div>
+  ${bkReconHtml(R, false)}
+  <h3 style="margin:18px 0 6px">Statement lines not in books</h3><table><thead><tr><th>Date</th><th>Description</th><th class="r">Debit</th><th class="r">Credit</th></tr></thead><tbody>${R.pend.map(l => `<tr><td>${fdate(l.date)}</td><td>${esc(l.desc)}</td><td class="r">${l.debit ? inr(l.debit) : "—"}</td><td class="r">${l.credit ? inr(l.credit) : "—"}</td></tr>`).join("") || `<tr><td colspan="4">None</td></tr>`}</tbody></table>
+  <h3 style="margin:18px 0 6px">Book entries not on statement</h3><table><thead><tr><th>Date</th><th>Entry</th><th class="r">Out</th><th class="r">In</th></tr></thead><tbody>${R.unm.map(r => `<tr><td>${fdate(r.x.date)}</td><td>${esc(bkRecLabel(r.t, r.x))}</td><td class="r">${r.out ? inr(r.out) : "—"}</td><td class="r">${r.inn ? inr(r.inn) : "—"}</td></tr>`).join("") || `<tr><td colspan="4">None</td></tr>`}</tbody></table>
+  <div class="pf">Powered by ${FOOTER_BRAND}</div></div>`);
+}
+function bankCsv() {
+  const rows = [["Date", "Account", "Description", "Debit", "Credit", "Status", "Linked to"], ...BK().lines.slice().sort((a, b) => a.date.localeCompare(b.date)).map(l => [fdate(l.date), l.acct, l.desc, l.debit, l.credit, bkSt(l), bkLinked(l).map(k => bkRecLabel(k.t, db[k.t].find(x => x.id === k.id))).join(" | ")])];
+  download(CLIENT_NAME + "_bank_lines_" + today() + ".csv", "\ufeff" + rows.map(r => r.map(csvq).join(",")).join("\r\n"), "text/csv");
 }
 
 /* ---------------- boot ---------------- */
