@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KRN Audit Consultancy — Accounting ERP</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--ink:#1c2333;--mut:#6b7488;--line:#e3e7f0;--pri:#3b4fd8;--pri2:#2a3bb5;--ok:#0f9d6a;--bad:#d64545;--warn:#d98a0b;--side:#141b34}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+#app{display:flex;min-height:100vh}
+aside{width:236px;background:var(--side);color:#c4cbe3;padding:14px 10px;position:sticky;top:0;height:100vh;overflow:auto;flex:none}
+aside .brand{color:#fff;font-weight:700;font-size:16px;padding:6px 10px 14px;letter-spacing:.2px}
+aside .brand small{display:block;font-weight:400;color:#8b94b5;font-size:11px;margin-top:2px}
+aside h6{margin:14px 10px 4px;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:#6f7aa3}
+aside a{display:block;padding:7px 10px;border-radius:8px;color:#c4cbe3;text-decoration:none;cursor:pointer}
+aside a:hover{background:#1f2850}aside a.on{background:var(--pri);color:#fff}
+main{flex:1;min-width:0}
+.top{display:flex;gap:10px;align-items:center;padding:10px 22px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.top .sp{flex:1}
+#menu{display:none}
+.page{padding:20px 22px 60px;max-width:1400px}
+h1{font-size:20px;margin:0 0 14px}h2{font-size:15px;margin:18px 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.grid{display:grid;gap:12px}.g4{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}.g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px}
+.kpi b{display:block;font-size:20px;margin-top:4px}.kpi span{color:var(--mut);font-size:12px}
+.mut{color:var(--mut)}.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.r{text-align:right}.c{text-align:center}.b{font-weight:600}
+button,.btn{white-space:nowrap;font:inherit;border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;color:var(--ink)}
+button:hover{border-color:var(--pri)}
+.pri{background:var(--pri);border-color:var(--pri);color:#fff}.pri:hover{background:var(--pri2)}
+.dng{color:var(--bad)}.sm{padding:3px 8px;font-size:12px}
+input,select,textarea{font:inherit;border:1px solid #cfd5e4;border-radius:8px;padding:7px 9px;background:#fff;color:var(--ink);width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid #c7cffa;border-color:var(--pri)}
+label{display:block;font-size:12px;color:var(--mut);margin:0 0 3px}
+.f{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:10px}
+.f .w2{grid-column:span 2}.f .w3{grid-column:span 3}.f .w4{grid-column:1/-1}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.bar .sp{flex:1}
+.bar input,.bar select{width:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--mut);font-weight:600;background:#fafbfe;white-space:nowrap}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.tot td{font-weight:700;border-top:2px solid var(--ink);background:#fafbfe}
+tr.sub td{font-weight:600;background:#fafbfe}
+.tw{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff}
+.tw table{min-width:640px}
+.tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;background:#eef0fb;color:var(--pri)}
+.tag.g{background:#e3f6ee;color:var(--ok)}.tag.r{background:#fdeaea;color:var(--bad)}.tag.y{background:#fff3da;color:var(--warn)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
+.tabs button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.ov{position:fixed;inset:0;background:rgba(15,20,40,.5);z-index:50;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px}
+.md{background:#fff;border-radius:14px;width:100%;max-width:640px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.md.wide{max-width:1100px}.md h3{margin:0 0 14px;font-size:17px}
+.foot{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+.tot-panel{margin-left:auto;max-width:340px}.tot-panel div{display:flex;justify-content:space-between;padding:3px 0}
+.tot-panel .gt{border-top:2px solid var(--ink);font-weight:700;font-size:16px;margin-top:4px;padding-top:6px}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1c2333;color:#fff;padding:10px 18px;border-radius:10px;z-index:99;display:none}
+.tfmt{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--ink);background:#fff}
+.tfmt>div{padding:0}.tfmt>div:first-child{border-right:1px solid var(--ink)}
+.tfmt .hd{display:flex;justify-content:space-between;padding:8px 10px;font-weight:700;border-bottom:1px solid var(--ink);background:#f1f3fb}
+.tfmt .row{display:flex;justify-content:space-between;padding:4px 10px;gap:10px}
+.tfmt .row.h{font-weight:700;margin-top:6px}.tfmt .row.i{padding-left:24px}
+.tfmt .row.t{font-weight:700;border-top:2px solid var(--ink);margin-top:8px;padding:8px 10px}
+.tfmt .row span:last-child{font-variant-numeric:tabular-nums;white-space:nowrap}
+.inv{padding:6px;font-size:13px}.inv .hd{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:10px}
+.inv h4{margin:0 0 2px;font-size:18px}.inv .ttl{font-size:16px;font-weight:700;text-align:right}
+.inv table td,.inv table th{padding:5px 6px}
+.bars{display:flex;gap:6px;align-items:flex-end;height:150px;padding:8px 0}
+.bars>div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;font-size:10px;color:var(--mut)}
+.bars i{display:block;width:42%;border-radius:4px 4px 0 0;min-height:1px}
+.bars .pair{display:flex;gap:2px;align-items:flex-end;width:100%;justify-content:center;flex:1}
+.empty{padding:30px;text-align:center;color:var(--mut)}
+.warnbox{background:#fff8e6;border:1px solid #f1d58a;border-radius:10px;padding:10px 14px;margin-bottom:12px}
+body.locked aside,body.locked .top{display:none}body.locked .page{max-width:none;padding:0}
+@media(max-width:860px){aside{position:fixed;left:-250px;z-index:40;transition:left .2s}aside.open{left:0}#menu{display:inline-block}.page{padding:14px 12px 60px}.tfmt{grid-template-columns:1fr}.tfmt>div:first-child{border-right:0;border-bottom:1px solid var(--ink)}}
+@media print{
+ body *{visibility:hidden}
+ body.pm .print-area,body.pm .print-area *{visibility:visible}
+ body.pm .print-area{position:absolute;left:0;top:0;width:100%}
+ body.pn #main,body.pn #main *{visibility:visible}
+ body.pn #main{position:absolute;left:0;top:0;width:100%}
+ body.pn .noprint,body.pn .noprint *{visibility:hidden;display:none}
+ .ov{position:static;background:none;padding:0}.md{box-shadow:none;max-width:none;padding:0}
+ body{background:#fff}.card{border:0}
+}
+</style>
+</head>
+<body>
+<div id="app"><aside id="side"></aside><main><div class="top noprint" id="top"></div><div class="page" id="main"></div></main></div>
+<div id="modals"></div><div id="toast"></div>
+<script>
+'use strict';
+/* ===================== utils ===================== */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const r2=n=>Math.round((+n||0)*100)/100;
+const fmt=n=>{n=r2(n);const neg=n<0;const [i,d]=Math.abs(n).toFixed(2).split('.');let last=i.slice(-3),rest=i.slice(0,-3);if(rest)last=rest.replace(/\B(?=(\d{2})+(?!\d))/g,',')+','+last;return(neg?'-':'')+last+'.'+d};
+const z=n=>r2(n)?fmt(n):'';
+const drcr=n=>{n=r2(n);return n>0?fmt(n)+' Dr':n<0?fmt(-n)+' Cr':'0.00'};
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const uid=()=>Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-4);
+const today=()=>new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+const dmy=d=>d?d.slice(8)+'-'+d.slice(5,7)+'-'+d.slice(0,4):'';
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fyOf=d=>{const y=+d.slice(0,4),m=+d.slice(5,7),s=m>=4?y:y-1;return s+'-'+String(s+1).slice(2)};
+const fyRange=f=>{const s=+f.slice(0,4);return{start:s+'-04-01',end:(s+1)+'-03-31'}};
+const fyPrev=f=>{const s=+f.slice(0,4)-1;return s+'-'+String(s+1).slice(2)};
+const fyNext=f=>{const s=+f.slice(0,4)+1;return s+'-'+String(s+1).slice(2)};
+const fyList=(a,b)=>{const o=[];let f=a;while(f<=b){o.push(f);f=fyNext(f)}return o};
+const monthsOf=f=>{const s=+f.slice(0,4);return Array.from({length:12},(_,i)=>{const m=(3+i)%12+1,y=m>=4?s:s+1;return{key:y+'-'+String(m).padStart(2,'0'),label:MON[m-1]+' '+y}})};
+const monthRange=k=>{const[y,m]=k.split('-').map(Number);const e=new Date(y,m,0).getDate();return{start:k+'-01',end:k+'-'+String(e).padStart(2,'0')}};
+const STATES={'01':'Jammu & Kashmir','02':'Himachal Pradesh','03':'Punjab','04':'Chandigarh','05':'Uttarakhand','06':'Haryana','07':'Delhi','08':'Rajasthan','09':'Uttar Pradesh','10':'Bihar','11':'Sikkim','12':'Arunachal Pradesh','13':'Nagaland','14':'Manipur','15':'Mizoram','16':'Tripura','17':'Meghalaya','18':'Assam','19':'West Bengal','20':'Jharkhand','21':'Odisha','22':'Chhattisgarh','23':'Madhya Pradesh','24':'Gujarat','26':'Dadra & Nagar Haveli and Daman & Diu','27':'Maharashtra','29':'Karnataka','30':'Goa','31':'Lakshadweep','32':'Kerala','33':'Tamil Nadu','34':'Puducherry','35':'Andaman & Nicobar Islands','36':'Telangana','37':'Andhra Pradesh','38':'Ladakh','97':'Other Territory'};
+const stateOpts=sel=>Object.entries(STATES).map(([k,v])=>`<option value="${k}"${k===sel?' selected':''}>${k} - ${v}</option>`).join('');
+function words(n){n=Math.round(n);if(!n)return'Zero';const a=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'],b=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];const two=x=>x<20?a[x]:b[Math.floor(x/10)]+(x%10?' '+a[x%10]:'');const three=x=>(x>=100?a[Math.floor(x/100)]+' Hundred'+(x%100?' ':''):'')+(x%100?two(x%100):'');let s='';const cr=Math.floor(n/1e7);n%=1e7;const lk=Math.floor(n/1e5);n%=1e5;const th=Math.floor(n/1e3);n%=1e3;if(cr)s+=three(cr)+' Crore ';if(lk)s+=three(lk)+' Lakh ';if(th)s+=three(th)+' Thousand ';if(n)s+=three(n);return s.trim()}
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',2600)}
+function download(name,text,type='application/json'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+function exportSheets(fname,sheets){
+  if(window.XLSX){const wb=XLSX.utils.book_new();sheets.forEach(s=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(s.aoa),s.name.replace(/[\\\/?*\[\]:]/g,'').slice(0,31)||'Sheet'));XLSX.writeFile(wb,fname+'.xlsx')}
+  else{const csv=sheets[0].aoa.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n');download(fname+'.csv',csv,'text/csv');toast('Excel library not loaded (offline?) - exported CSV')}
+}
+
+/* ===================== database ===================== */
+const KEY='krn_billing_v1';
+let DB=null,REV=0,CUR={title:'Report',aoa:[]};
+function save(){REV++;if(typeof SESSION!=='undefined'&&SESSION)queuePersist()}
+const C=()=>DB.companies[DB.active];
+const FYS=()=>DB.fy;
+const MC=new Map();
+function memo(k,fn){if(MC.rev!==REV){MC.clear();MC.rev=REV}if(!MC.has(k))MC.set(k,fn());return MC.get(k)}
+
+/* ===================== chart of accounts ===================== */
+const GROUPS={'Capital Account':{n:'L'},'Loans (Liability)':{n:'L'},'Current Liabilities':{n:'L'},'Sundry Creditors':{n:'L'},'Duties & Taxes':{n:'L'},
+ 'Fixed Assets':{n:'A'},'Investments':{n:'A'},'Current Assets':{n:'A'},'Sundry Debtors':{n:'A'},'Cash-in-Hand':{n:'A'},'Bank Accounts':{n:'A'},
+ 'Sales Accounts':{n:'I'},'Purchase Accounts':{n:'E'},'Direct Expenses':{n:'E'},'Indirect Expenses':{n:'E'},'Indirect Incomes':{n:'I'}};
+const isNom=g=>'IE'.includes(GROUPS[g]?.n||'A');
+function defaultAccounts(){const A=(id,name,group,sys=1)=>({id,name,group,opening:0,ot:'Dr',sys});
+ return[A('cash','Cash','Cash-in-Hand'),A('bank','Bank Account','Bank Accounts'),
+ A('sales','Sales','Sales Accounts'),A('sales_ret','Sales Returns','Sales Accounts'),A('purchases','Purchases','Purchase Accounts'),A('pur_ret','Purchase Returns','Purchase Accounts'),
+ A('out_cgst','Output CGST','Duties & Taxes'),A('out_sgst','Output SGST','Duties & Taxes'),A('out_igst','Output IGST','Duties & Taxes'),
+ A('in_cgst','Input CGST','Duties & Taxes'),A('in_sgst','Input SGST','Duties & Taxes'),A('in_igst','Input IGST','Duties & Taxes'),
+ A('tds_rec','TDS Receivable','Current Assets'),A('tds_pay','TDS Payable','Current Liabilities'),A('roundoff','Round Off','Indirect Expenses'),A('capital','Capital Account','Capital Account'),
+ A('freight','Freight & Carriage Inward','Direct Expenses',0),A('wages','Wages','Direct Expenses',0),
+ A('rent','Rent','Indirect Expenses',0),A('salary','Salaries','Indirect Expenses',0),A('elec','Electricity','Indirect Expenses',0),A('tel','Telephone & Internet','Indirect Expenses',0),
+ A('prof','Professional Fees','Indirect Expenses',0),A('office','Office Expenses','Indirect Expenses',0),A('travel','Travelling & Conveyance','Indirect Expenses',0),
+ A('bankchg','Bank Charges','Indirect Expenses',0),A('interest','Interest Paid','Indirect Expenses',0),A('dep','Depreciation','Indirect Expenses',0),A('misc','Miscellaneous Expenses','Indirect Expenses',0),
+ A('intinc','Interest Received','Indirect Incomes',0),A('othinc','Other Income','Indirect Incomes',0),A('fa_comp','Computers & Equipment','Fixed Assets',0)]}
+const TYPES={sales:{name:'Sales Invoice',pre:'INV'},purchase:{name:'Purchase Bill',pre:'PUR'},cn:{name:'Credit Note',pre:'CN'},dn:{name:'Debit Note',pre:'DN'},receipt:{name:'Receipt',pre:'RCT'},payment:{name:'Payment',pre:'PAY'},expense:{name:'Expense',pre:'EXP'},journal:{name:'Journal',pre:'JV'},contra:{name:'Contra',pre:'CTR'}};
+const GSTR=[0,0.25,3,5,12,18,28,40];
+
+function newCompany(o){const id='c'+uid();const c={id,name:o.name,type:o.type||'Proprietorship',pan:(o.pan||'').toUpperCase(),gstin:(o.gstin||'').toUpperCase(),gstReg:!!o.gstReg,state:o.state||'33',address:o.address||'',phone:'',email:'',
+ bank:{name:'',ac:'',ifsc:'',upi:''},firstFY:o.firstFY,openingStock:+o.openingStock||0,stock:{},accounts:defaultAccounts(),parties:[],items:[],vouchers:[],created:Date.now()};
+ DB.companies[id]=c;DB.active=id;DB.fy=fyOf(today())<c.firstFY?c.firstFY:fyOf(today());save();return c}
+
+/* ===================== lookups ===================== */
+const amap=c=>memo('am'+c.id,()=>Object.fromEntries(c.accounts.map(a=>[a.id,a])));
+const accName=(c,id)=>amap(c)[id]?.name||'(deleted)';
+const party=(c,id)=>c.parties.find(p=>p.id===id);
+function nextNo(c,type,fy){const pre=TYPES[type].pre;let mx=0;c.vouchers.forEach(v=>{if(v.type===type&&fyOf(v.date)===fy){const m=/(\d+)$/.exec(v.no||'');if(m)mx=Math.max(mx,+m[1])}});return pre+'-'+String(mx+1).padStart(3,'0')}
+
+/* ===================== GST calc ===================== */
+function calc(c,v){
+  const intra=v.inter!==undefined?!v.inter:((v.pos||c.state)===c.state);
+  const reg=c.gstReg;const T={lines:[],taxable:0,cgst:0,sgst:0,igst:0,intra};
+  (v.lines||[]).forEach(l=>{
+    const gross=(+l.qty||0)*(+l.rate||0),taxable=r2(gross-gross*((+l.disc||0)/100));
+    const rate=reg?(+l.gst||0):0;let cg=0,sg=0,ig=0;
+    if(intra){cg=r2(taxable*rate/200);sg=cg}else ig=r2(taxable*rate/100);
+    T.lines.push({...l,taxable,gr:rate,cgst:cg,sgst:sg,igst:ig,total:r2(taxable+cg+sg+ig)});
+    T.taxable+=taxable;T.cgst+=cg;T.sgst+=sg;T.igst+=ig});
+  ['taxable','cgst','sgst','igst'].forEach(k=>T[k]=r2(T[k]));
+  T.gross=r2(T.taxable+T.cgst+T.sgst+T.igst);
+  T.total=(v.noRound||['expense'].includes(v.type))?T.gross:Math.round(T.gross);T.round=r2(T.total-T.gross);return T}
+const calcExp=(c,v)=>calc(c,{lines:[{qty:1,rate:+v.amount||0,gst:v.gst}],inter:!!v.inter,noRound:true,type:'expense'});
+
+/* ===================== voucher -> ledger entries ===================== */
+function vEntries(c,v){
+  const E=[],add=(acc,dr,cr)=>{dr=r2(dr);cr=r2(cr);if((dr||cr)&&acc)E.push({acc,dr,cr})};
+  const taxOut=T=>{add('out_cgst',0,T.cgst);add('out_sgst',0,T.sgst);add('out_igst',0,T.igst)};
+  const taxOutDr=T=>{add('out_cgst',T.cgst,0);add('out_sgst',T.sgst,0);add('out_igst',T.igst,0)};
+  const taxIn=T=>{add('in_cgst',T.cgst,0);add('in_sgst',T.sgst,0);add('in_igst',T.igst,0)};
+  const taxInCr=T=>{add('in_cgst',0,T.cgst);add('in_sgst',0,T.sgst);add('in_igst',0,T.igst)};
+  const ro=(T,drWhenPos)=>drWhenPos?add('roundoff',T.round>0?T.round:0,T.round<0?-T.round:0):add('roundoff',T.round<0?-T.round:0,T.round>0?T.round:0);
+  switch(v.type){
+   case'sales':{const T=calc(c,v);add(v.partyId,T.total,0);add(v.ledger||'sales',0,T.taxable);taxOut(T);ro(T,false);break}
+   case'cn':{const T=calc(c,v);add(v.partyId,0,T.total);add(v.ledger||'sales_ret',T.taxable,0);taxOutDr(T);ro(T,true);break}
+   case'purchase':{const T=calc(c,v);const itc=v.itc!==false;add(v.partyId,0,T.total);add(v.ledger||'purchases',T.taxable+(itc?0:T.cgst+T.sgst+T.igst),0);if(itc)taxIn(T);ro(T,true);break}
+   case'dn':{const T=calc(c,v);const itc=v.itc!==false;add(v.partyId,T.total,0);add(v.ledger||'pur_ret',0,T.taxable+(itc?0:T.cgst+T.sgst+T.igst));if(itc)taxInCr(T);ro(T,false);break}
+   case'receipt':{const a=+v.amount||0,t=+v.tds||0;add(v.modeAcc||'bank',a-t,0);add('tds_rec',t,0);add(v.accId,0,a);break}
+   case'payment':{const a=+v.amount||0,t=+v.tds||0;add(v.accId,a,0);add(v.modeAcc||'bank',0,a-t);add('tds_pay',0,t);break}
+   case'expense':{const T=calcExp(c,v),itc=v.itc!==false;add(v.ledger,T.taxable+(itc?0:T.cgst+T.sgst+T.igst),0);if(itc)taxIn(T);add(v.modeAcc||'cash',0,T.total);break}
+   case'contra':add(v.to,+v.amount||0,0);add(v.from,0,+v.amount||0);break;
+   case'journal':(v.lines||[]).forEach(l=>add(l.acc,+l.dr||0,+l.cr||0));break}
+  return E}
+const ENT=c=>memo('ent'+c.id,()=>{const o=[];c.vouchers.forEach((v,i)=>vEntries(c,v).forEach(e=>o.push({...e,date:v.date,vid:v.id,type:v.type,no:v.no,narr:v.narr||'',i})));o.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.i-b.i);return o});
+const EV=c=>memo('ev'+c.id,()=>{const m={};ENT(c).forEach(e=>(m[e.vid]=m[e.vid]||[]).push(e));return m});
+const vTotal=(c,v)=>{if(['sales','purchase','cn','dn'].includes(v.type))return calc(c,v).total;if(v.type==='expense')return calcExp(c,v).total;if(v.type==='journal')return r2((v.lines||[]).reduce((s,l)=>s+(+l.dr||0),0));return+v.amount||0};
+const vParty=(c,v)=>{if(v.partyId)return accName(c,v.partyId);if(v.type==='receipt'||v.type==='payment')return accName(c,v.accId);if(v.type==='expense')return accName(c,v.ledger);if(v.type==='contra')return accName(c,v.from)+' → '+accName(c,v.to);return v.narr||''};
+
+/* ===================== reports engine ===================== */
+function TB(c,fy){return memo('tb'+c.id+fy,()=>{const{start,end}=fyRange(fy),m={};
+  c.accounts.forEach(a=>m[a.id]={a,open:isNom(a.group)?0:(a.ot==='Cr'?-1:1)*(+a.opening||0),dr:0,cr:0});
+  ENT(c).forEach(e=>{const t=m[e.acc];if(!t||e.date>end)return;if(e.date<start){if(!isNom(t.a.group))t.open+=e.dr-e.cr}else{t.dr+=e.dr;t.cr+=e.cr}});
+  Object.values(m).forEach(t=>{t.open=r2(t.open);t.dr=r2(t.dr);t.cr=r2(t.cr);t.close=r2(t.open+t.dr-t.cr)});return m})}
+const stockClose=(c,fy)=>+(c.stock||{})[fy]||0;
+const stockOpen=(c,fy)=>fy===c.firstFY?(+c.openingStock||0):stockClose(c,fyPrev(fy));
+const sum=a=>r2(a.reduce((s,x)=>s+x.amt,0));
+function PL(c,fy){return memo('pl'+c.id+fy,()=>{const tb=TB(c,fy);
+  const by=(g,sgn)=>c.accounts.filter(a=>a.group===g).map(a=>({id:a.id,name:a.name,amt:r2(sgn*(tb[a.id].dr-tb[a.id].cr))})).filter(x=>x.amt);
+  const sales=by('Sales Accounts',-1),purch=by('Purchase Accounts',1),dexp=by('Direct Expenses',1),iexp=by('Indirect Expenses',1),iinc=by('Indirect Incomes',-1);
+  const o=stockOpen(c,fy),cl=stockClose(c,fy);const dr=r2(o+sum(purch)+sum(dexp)),cr=r2(sum(sales)+cl);const gp=r2(cr-dr);const np=r2(gp+sum(iinc)-sum(iexp));
+  return{sales,purch,dexp,iexp,iinc,open:o,close:cl,tSales:sum(sales),tPurch:sum(purch),tDexp:sum(dexp),tIexp:sum(iexp),tIinc:sum(iinc),gp,np,dr,cr}})}
+const priorProfit=(c,fy)=>r2(fyList(c.firstFY,fyPrev(fy)).reduce((s,f)=>s+PL(c,f).np,0));
+const BSORD=['Capital Account','Profit & Loss','Loans (Liability)','Current Liabilities','Sundry Creditors','Duties & Taxes','Difference','Fixed Assets','Investments','Stock-in-Hand','Sundry Debtors','Cash & Bank','Current Assets'];
+function BS(c,fy){return memo('bs'+c.id+fy,()=>{const tb=TB(c,fy),pl=PL(c,fy);const S={L:{},A:{}};
+  const put=(side,key,label,item,agg)=>{const s=S[side][key+'|'+label]=S[side][key+'|'+label]||{key,label,items:[],agg:!!agg,total:0};s.items.push(item);s.total=r2(s.total+item.amt)};
+  c.accounts.forEach(a=>{if(isNom(a.group))return;const b=tb[a.id].close;if(!b)return;const side=b>0?'A':'L',nat=GROUPS[a.group].n;
+    let key=a.group,label=a.group;if(key==='Cash-in-Hand'||key==='Bank Accounts'){key='Cash & Bank';label='Cash & Bank'}
+    if(nat!==side)label=a.group+(side==='L'?' (credit balances)':' (debit balances)');
+    put(side,key,label,{id:a.id,name:a.name,amt:Math.abs(b)},['Sundry Debtors','Sundry Creditors'].includes(a.group))});
+  const pp=priorProfit(c,fy);
+  if(pp)put('L','Profit & Loss','Profit & Loss A/c',{name:'Profit/(Loss) brought forward',amt:pp});
+  if(pl.np)put('L','Profit & Loss','Profit & Loss A/c',{name:'Net Profit/(Loss) for the year',amt:pl.np});
+  if(pl.close)put('A','Stock-in-Hand','Stock-in-Hand',{name:'Closing Stock',amt:pl.close});
+  const ord=o=>Object.values(o).sort((a,b)=>BSORD.indexOf(a.key)-BSORD.indexOf(b.key));
+  let L=ord(S.L),A=ord(S.A);let tL=r2(L.reduce((s,x)=>s+x.total,0)),tA=r2(A.reduce((s,x)=>s+x.total,0));const diff=r2(tA-tL);
+  if(diff>0){L.push({key:'Difference',label:'Difference in Opening Balances',items:[{name:'Difference in Opening Balances',amt:diff}],total:diff});tL=r2(tL+diff)}
+  else if(diff<0){A.push({key:'Difference',label:'Difference in Opening Balances',items:[{name:'Difference in Opening Balances',amt:-diff}],total:-diff});tA=r2(tA-diff)}
+  return{L,A,tL,tA,diff}})}
+
+/* ledger / outstanding */
+function ledgerData(c,accId,fy,from,to){const tb=TB(c,fy),t=tb[accId];if(!t)return null;const{start}=fyRange(fy);let open=t.open;const rows=[];
+  ENT(c).forEach(e=>{if(e.acc!==accId||e.date<start||e.date>to)return;if(e.date<from)open=r2(open+e.dr-e.cr);else rows.push(e)});
+  let bal=open;const out=rows.map(e=>{bal=r2(bal+e.dr-e.cr);const oth=(EV(c)[e.vid]||[]).filter(x=>x.acc!==accId).map(x=>accName(c,x.acc));return{...e,bal,part:oth.length>2?oth[0]+' & others':oth.join(', ')}});
+  return{open,rows:out,close:bal,dr:r2(rows.reduce((s,e)=>s+e.dr,0)),cr:r2(rows.reduce((s,e)=>s+e.cr,0))}}
+function outstanding(c,fy,kind){const end=fyRange(fy).end,asOf=today()<end?today():end,grp=kind==='dr'?'Sundry Debtors':'Sundry Creditors',sg=kind==='dr'?1:-1,res=[];
+  const days=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5);
+  c.accounts.filter(a=>a.group===grp).forEach(a=>{const bills=[];let set=0;const ob=(a.ot==='Cr'?-1:1)*(+a.opening||0)*sg;
+    if(ob>0)bills.push({date:fyRange(c.firstFY).start,ref:'Opening balance',amt:ob});else set+=-ob;
+    ENT(c).forEach(e=>{if(e.acc!==a.id||e.date>end)return;const d=(e.dr-e.cr)*sg;if(d>0)bills.push({date:e.date,ref:e.no,amt:d});else set+=-d});
+    bills.forEach(b=>{const u=Math.min(b.amt,set);b.pending=r2(b.amt-u);set=r2(set-u);b.age=days(b.date,asOf)});
+    const pend=bills.filter(b=>b.pending>0),adv=r2(set),bk=[0,0,0,0];
+    pend.forEach(b=>{bk[b.age<=30?0:b.age<=60?1:b.age<=90?2:3]+=b.pending});
+    const total=r2(pend.reduce((s,b)=>s+b.pending,0)-adv);if(total||adv)res.push({acc:a,total,bk:bk.map(r2),adv,bills:pend})});
+  return{rows:res.sort((x,y)=>y.total-x.total),asOf}}
+
+/* GST docs */
+function gdocs(c,from,to){const out=[];c.vouchers.forEach(v=>{if(v.date<from||v.date>to)return;
+  if(['sales','cn','purchase','dn'].includes(v.type)){const T=calc(c,v),p=party(c,v.partyId);out.push({v,type:v.type,no:v.no,ref:v.refNo||'',date:v.date,party:p?.name||'',gstin:p?.gstin||'',pos:v.pos||p?.state||c.state,T,dir:v.type==='sales'||v.type==='cn'?'out':'in',sign:v.type==='sales'||v.type==='purchase'?1:-1,itc:v.itc!==false})}
+  else if(v.type==='expense'&&c.gstReg&&+v.gst>0){const T=calcExp(c,v);out.push({v,type:'expense',no:v.no,ref:v.refNo||'',date:v.date,party:accName(c,v.ledger),gstin:'',pos:v.inter?'99':c.state,T,dir:'in',sign:1,itc:v.itc!==false})}});
+  return out}
+function gstr3b(c,from,to){const d=gdocs(c,from,to),o={tx:0,nil:0,cgst:0,sgst:0,igst:0},i={cgst:0,sgst:0,igst:0,taxable:0};
+  d.forEach(x=>{if(x.dir==='out'){const nil=x.T.lines.filter(l=>!l.gr).reduce((s,l)=>s+l.taxable,0);o.nil+=x.sign*nil;o.tx+=x.sign*(x.T.taxable-nil);o.cgst+=x.sign*x.T.cgst;o.sgst+=x.sign*x.T.sgst;o.igst+=x.sign*x.T.igst}
+   else if(x.itc){i.cgst+=x.sign*x.T.cgst;i.sgst+=x.sign*x.T.sgst;i.igst+=x.sign*x.T.igst;i.taxable+=x.sign*x.T.taxable}});
+  Object.keys(o).forEach(k=>o[k]=r2(o[k]));Object.keys(i).forEach(k=>i[k]=r2(i[k]));
+  const net={cgst:r2(o.cgst-i.cgst),sgst:r2(o.sgst-i.sgst),igst:r2(o.igst-i.igst)};net.total=r2(net.cgst+net.sgst+net.igst);return{o,i,net,docs:d}}
+/* ===================== shell ===================== */
+const NAV=[['Overview',[['dash','Dashboard']]],
+ ['Transactions',[['sales','Sales Invoices'],['purchase','Purchase Bills'],['receipt','Receipts'],['payment','Payments'],['expense','Expenses'],['cn','Credit Notes'],['dn','Debit Notes'],['journal','Journal & Contra'],['daybook','Day Book']]],
+ ['Masters',[['parties','Parties'],['items','Items & Services'],['ledgers','Ledgers']]],
+ ['Reports',[['ledger','Ledger'],['outstanding','Outstanding'],['tb','Trial Balance'],['pl','Profit & Loss'],['bs','Balance Sheet'],['gst','GST Reports']]],
+ ['Data',[['data','Export / Import'],['settings','Settings']]]];
+const PAGES={};const FLT={q:'',m:''};
+const curPage=()=>location.hash.slice(2)||'dash';
+function go(p){location.hash='#/'+p;$('#side').classList.remove('open')}
+function drawSide(){const p=curPage();$('#side').innerHTML=`<div class="brand">${esc(CONFIG.firm)}<small>${esc(DB?.meta?.clientName||CONFIG.product)}</small></div>`+
+  NAV.map(([h,l])=>`<h6>${h}</h6>`+l.map(([k,n])=>`<a class="${p===k?'on':''}" onclick="go('${k}')">${n}</a>`).join('')).join('')}
+function drawTop(){const c=C();$('#top').innerHTML=`<button id="menu" onclick="$('#side').classList.toggle('open')">☰</button>`+
+ (c?`<select style="width:auto;max-width:240px" onchange="switchCo(this.value)">${Object.values(DB.companies).map(x=>`<option value="${x.id}"${x.id===c.id?' selected':''}>${esc(x.name)}</option>`).join('')}</select>
+ <button class="sm" onclick="newCoModal()">+ Company</button>
+ <select style="width:auto" onchange="DB.fy=this.value;save();render()" title="Financial year">${fyList(c.firstFY,fyNext(fyOf(today())>FYS()?fyOf(today()):FYS())).map(f=>`<option${f===FYS()?' selected':''} value="${f}">FY ${f}</option>`).join('')}</select>
+ <span class="sp"></span><span class="mut">${c.gstReg?'GSTIN '+esc(c.gstin||'—'):'No GST'}</span>`:'<b>Welcome</b>')+`<span class="mut" id="syncst" style="font-size:12px">${esc(setStatus.last||'')}</span><span class="tag">${esc(SESSION.user)} · ${SESSION.role}</span><button class="sm" onclick="logout()">Sign out</button>`}
+function switchCo(id){DB.active=id;const c=C();if(FYS()<c.firstFY)DB.fy=c.firstFY;save();render()}
+function render(){if(!SESSION||!DB){document.body.classList.add('locked');drawLogin();return}document.body.classList.remove('locked');drawSide();drawTop();const c=C();if(!c){$('#main').innerHTML=onboardHTML();return}
+  if(FYS()<c.firstFY||!FYS())DB.fy=c.firstFY;
+  const fn=PAGES[curPage()]||PAGES.dash;try{$('#main').innerHTML=fn(c)}catch(e){console.error(e);$('#main').innerHTML='<div class="card bad">Error: '+esc(e.message)+'</div>'}}
+window.addEventListener('hashchange',render);
+const modal=(html,wide)=>{const o=document.createElement('div');o.className='ov';o.innerHTML=`<div class="md${wide?' wide':''}">${html}</div>`;$('#modals').appendChild(o);return o};
+const closeModal=el=>{(el||$('#modals').lastElementChild)?.remove()};
+const printEl=cls=>{document.body.classList.add(cls);window.print();setTimeout(()=>document.body.classList.remove(cls),300)};
+const printMain=()=>printEl('pn'),printModal=()=>printEl('pm');
+const expXlsx=()=>exportSheets(CUR.title.replace(/[^\w\- ]/g,'')+' '+(C()?.name||''),[{name:CUR.title,aoa:CUR.aoa}]);
+const toolbar=(extra='')=>`<span class="sp"></span>${extra}<button onclick="expXlsx()">Export Excel</button><button onclick="printMain()">Print</button>`;
+const hdrLine=(c,t,sub)=>`<div style="margin-bottom:10px"><b style="font-size:16px">${esc(c.name)}</b><br><span class="mut">${t} — ${sub}</span></div>`;
+
+/* ===================== company ===================== */
+function companyFields(c){c=c||{type:'Proprietorship',state:'33',firstFY:fyOf(today()),bank:{},gstReg:false};
+ const f=(id,l,v,ex='')=>`<div><label>${l}</label><input id="${id}" value="${esc(v??'')}" ${ex}></div>`;
+ return`<div class="f"><div class="w2"><label>Business / Client name *</label><input id="cf_name" value="${esc(c.name||'')}"></div>
+ <div><label>Entity type</label><select id="cf_type">${['Proprietorship','Partnership / LLP','Company','Trust / NGO','Individual / Other'].map(t=>`<option${t===c.type?' selected':''}>${t}</option>`).join('')}</select></div>
+ ${f('cf_pan','PAN',c.pan,'maxlength=10 style="text-transform:uppercase"')}
+ <div><label>GSTIN</label><input id="cf_gstin" value="${esc(c.gstin||'')}" maxlength="15" style="text-transform:uppercase" oninput="cfGstin(this)"></div>
+ <div><label>GST registered?</label><select id="cf_gstReg"><option value="0"${!c.gstReg?' selected':''}>No (no GST on bills)</option><option value="1"${c.gstReg?' selected':''}>Yes</option></select></div>
+ <div><label>State</label><select id="cf_state">${stateOpts(c.state)}</select></div>
+ <div class="w2"><label>Address</label><input id="cf_address" value="${esc(c.address||'')}"></div>
+ ${f('cf_phone','Phone',c.phone)}${f('cf_email','Email',c.email)}
+ <div><label>Books start from FY</label><select id="cf_firstFY" ${c.vouchers?.length?'disabled':''}>${fyList('2018-19',fyNext(fyOf(today()))).map(x=>`<option${x===c.firstFY?' selected':''}>${x}</option>`).join('')}</select></div>
+ ${f('cf_ostock','Opening stock value (start of first FY)',c.openingStock||0,'type=number step=0.01')}
+ ${f('cf_bank','Bank name',c.bank?.name)}${f('cf_ac','A/c number',c.bank?.ac)}${f('cf_ifsc','IFSC',c.bank?.ifsc)}${f('cf_upi','UPI ID',c.bank?.upi)}</div>`}
+function cfGstin(el){const g=el.value.toUpperCase();if(g.length>=2&&STATES[g.slice(0,2)])$('#cf_state').value=g.slice(0,2);if(g.length===15){$('#cf_pan').value=g.slice(2,12);$('#cf_gstReg').value='1'}}
+function readCompany(){const v=id=>$('#'+id).value.trim();return{name:v('cf_name'),type:v('cf_type'),pan:v('cf_pan').toUpperCase(),gstin:v('cf_gstin').toUpperCase(),gstReg:v('cf_gstReg')==='1',state:v('cf_state'),address:v('cf_address'),phone:v('cf_phone'),email:v('cf_email'),firstFY:v('cf_firstFY'),openingStock:+v('cf_ostock')||0,bank:{name:v('cf_bank'),ac:v('cf_ac'),ifsc:v('cf_ifsc'),upi:v('cf_upi')}}}
+function onboardHTML(){return`<div class="card" style="max-width:820px;margin:30px auto"><h1>Create your first company / client</h1><p class="mut">Each client gets separate books. Everything is stored in this browser — use Export / Import to back up and move data.</p>${companyFields()}<div class="foot"><button class="pri" onclick="createCo()">Create &amp; start</button></div></div>`}
+function createCo(m){const o=readCompany();if(!o.name){toast('Enter a name');return}if(o.gstin&&!/^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/.test(o.gstin)&&!confirm('GSTIN format looks invalid. Continue?'))return;
+  if(o.gstin)o.gstReg=true;const c=newCompany(o);Object.assign(c,{address:o.address,phone:o.phone,email:o.email,bank:o.bank});save();if(m)closeModal();go('dash');render();toast('Company created')}
+function newCoModal(){modal(`<h3>New company / client</h3>${companyFields()}<div class="foot"><button onclick="closeModal()">Cancel</button><button class="pri" onclick="createCo(1)">Create</button></div>`,true)}
+PAGES.settings=c=>{const fy=FYS();return`<h1>Settings — ${esc(c.name)}</h1><div class="card">${companyFields(c)}<div class="foot">${SESSION.role==='admin'?'<button class="dng" onclick="delCo()">Delete this company</button>':''}<button class="pri" onclick="saveCo()">Save settings</button></div></div>
+ <div class="card"><h2 style="margin-top:0">Closing stock — FY ${fy}</h2><p class="mut">Enter the closing stock value for the year (from your stock count). It is used in the Trading Account / Balance Sheet and becomes next year's opening stock.</p>
+ <div class="bar"><input type="number" step="0.01" id="stk" value="${stockClose(c,fy)||''}" style="max-width:220px"><button class="pri" onclick="setStock()">Save closing stock</button></div></div>`};
+function saveCo(){const c=C(),o=readCompany();if(!o.name){toast('Name required');return}if(c.vouchers.length)o.firstFY=c.firstFY;if(o.gstin)o.gstReg=true;Object.assign(c,o);save();render();toast('Saved')}
+function setStock(){const c=C();c.stock=c.stock||{};c.stock[FYS()]=+$('#stk').value||0;save();render();toast('Closing stock saved')}
+function delCo(){if(SESSION.role!=='admin'){toast('Only the administrator can delete a company');return}const c=C();if(!confirm(`Delete "${c.name}" and ALL its data? This cannot be undone. Export a backup first.`))return;if(!confirm('Really delete?'))return;delete DB.companies[c.id];DB.active=Object.keys(DB.companies)[0]||null;save();render()}
+
+/* ===================== registers ===================== */
+const INV=['sales','purchase','cn','dn'];
+function register(c,type){const fy=FYS(),types=type==='daybook'?Object.keys(TYPES):type==='journal'?['journal','contra']:[type];
+  const inv=INV.includes(type),q=FLT.q.toLowerCase();
+  let rows=c.vouchers.filter(v=>types.includes(v.type)&&fyOf(v.date)===fy&&(!FLT.m||v.date.slice(0,7)===FLT.m)).filter(v=>!q||(v.no+' '+vParty(c,v)+' '+(v.narr||'')+' '+(v.refNo||'')).toLowerCase().includes(q));
+  rows.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.no>a.no?1:-1));
+  const title=type==='daybook'?'Day Book':type==='journal'?'Journal & Contra':TYPES[type].name+'s';
+  const aoa=[['Date','Type','No','Particulars','Ref/Narration',...(inv?['Taxable','GST']:[]),'Amount']];
+  let tot=0;const body=rows.map(v=>{const T=inv?calc(c,v):null,a=vTotal(c,v);tot+=a;aoa.push([dmy(v.date),TYPES[v.type].name,v.no,vParty(c,v),v.refNo||v.narr||'',...(inv?[T.taxable,r2(T.cgst+T.sgst+T.igst)]:[]),a]);
+   return`<tr><td>${dmy(v.date)}</td>${type==='daybook'?`<td><span class="tag">${TYPES[v.type].name}</span></td>`:''}<td>${esc(v.no)}</td><td>${esc(vParty(c,v))}</td><td class="mut">${esc(v.refNo||v.narr||'')}</td>${inv?`<td class="n">${fmt(T.taxable)}</td><td class="n">${fmt(T.cgst+T.sgst+T.igst)}</td>`:''}<td class="n b">${fmt(a)}</td>
+   <td class="n noprint" style="white-space:nowrap"><button class="sm" onclick="viewV('${v.id}')">View</button> <button class="sm" onclick="openVoucher('${v.type}','${v.id}')">Edit</button> <button class="sm dng" onclick="delV('${v.id}')">Del</button></td></tr>`}).join('');
+  aoa.push([]);aoa.push(['','','','','Total',...(inv?['','']:[]),r2(tot)]);CUR={title,aoa};
+  const add=type==='daybook'?'':type==='journal'?`<button class="pri" onclick="openVoucher('journal')">+ Journal</button><button class="pri" onclick="openVoucher('contra')">+ Contra</button>`:`<button class="pri" onclick="openVoucher('${type}')">+ New ${TYPES[type].name}</button>`;
+  return`<h1>${title} <span class="mut" style="font-size:13px;font-weight:400">FY ${fy}</span></h1><div class="bar noprint">${add}<select onchange="FLT.m=this.value;render()"><option value="">All months</option>${monthsOf(fy).map(m=>`<option value="${m.key}"${FLT.m===m.key?' selected':''}>${m.label}</option>`).join('')}</select><input placeholder="Search…" value="${esc(FLT.q)}" onchange="FLT.q=this.value;render()">${toolbar()}</div>
+  <div class="tw"><table><thead><tr><th>Date</th>${type==='daybook'?'<th>Type</th>':''}<th>No</th><th>Particulars</th><th>Ref / Narration</th>${inv?'<th class="n">Taxable</th><th class="n">GST</th>':''}<th class="n">Amount</th><th class="noprint"></th></tr></thead><tbody>${body||`<tr><td colspan="9" class="empty">No entries for this selection.</td></tr>`}</tbody>${rows.length?`<tr class="tot"><td colspan="${3+(type==='daybook'?1:0)+1+(inv?2:0)}">Total (${rows.length})</td><td class="n">${fmt(tot)}</td><td class="noprint"></td></tr>`:''}</table></div>`}
+['sales','purchase','receipt','payment','expense','cn','dn','journal','daybook'].forEach(t=>PAGES[t]=c=>register(c,t));
+function delV(id){if(!confirm('Delete this entry?'))return;const c=C();{const v=c.vouchers.find(x=>x.id===id);if(v)logAct('Deleted '+TYPES[v.type].name+' '+v.no)}c.vouchers=c.vouchers.filter(v=>v.id!==id);save();render();toast('Deleted')}
+
+/* ===================== voucher form ===================== */
+let F=null,FM=null;
+const blankLine=()=>({desc:'',hsn:'',qty:1,unit:'',rate:'',disc:0,gst:18});
+function openVoucher(type,id,preset){const c=C();let v;
+  if(id)v=JSON.parse(JSON.stringify(c.vouchers.find(x=>x.id===id)));
+  else{const fy=FYS(),r=fyRange(fy),t=today();v={id:null,type,date:t<r.start?r.start:t>r.end?r.end:t,narr:'',no:nextNo(c,type,fy)};
+   if(INV.includes(type))Object.assign(v,{partyId:'',pos:'',lines:[blankLine()],refNo:'',ledger:type==='sales'?'sales':type==='purchase'?'purchases':type==='cn'?'sales_ret':'pur_ret',itc:true,noRound:false});
+   else if(type==='receipt'||type==='payment')Object.assign(v,{accId:'',modeAcc:'bank',amount:'',tds:'',ref:''});
+   else if(type==='expense')Object.assign(v,{ledger:'',amount:'',gst:0,inter:false,itc:true,modeAcc:'cash',refNo:''});
+   else if(type==='contra')Object.assign(v,{from:'bank',to:'cash',amount:''});
+   else Object.assign(v,{lines:[{acc:'',dr:'',cr:''},{acc:'',dr:'',cr:''}]});
+   Object.assign(v,preset||{})}
+  F=v;FM=modal('',true);FM.addEventListener('input',fInput);FM.addEventListener('change',fChange);drawForm()}
+function accSelect(c,attr,filter,sel,blank='— select —'){const gs={};c.accounts.filter(filter).forEach(a=>(gs[a.group]=gs[a.group]||[]).push(a));
+  return`<select ${attr}><option value="">${blank}</option>${Object.entries(gs).map(([g,l])=>`<optgroup label="${g}">${l.map(a=>`<option value="${a.id}"${a.id===sel?' selected':''}>${esc(a.name)}</option>`).join('')}</optgroup>`).join('')}</select>`}
+const inG=(...g)=>a=>g.includes(a.group);
+function formBody(c,v){const t=v.type,I=(f,ty='text',ex='')=>`<input type="${ty}" data-f="${f}" value="${esc(v[f]??'')}" ${ex}>`;
+  const head=`<div><label>Date</label>${I('date','date')}</div><div><label>${TYPES[t].name} No</label>${I('no')}</div>`;
+  if(INV.includes(t)){const sale=t==='sales'||t==='cn',grp=sale?'Sundry Debtors':'Sundry Creditors';
+    const ps=c.accounts.filter(a=>a.group===grp);
+    return`<div class="f"><div class="w2"><label>${sale?'Customer':'Supplier'}</label><div style="display:flex;gap:6px"><select data-f="partyId" data-rr="party"><option value="">— select —</option>${ps.map(a=>`<option value="${a.id}"${a.id===v.partyId?' selected':''}>${esc(a.name)}</option>`).join('')}</select><button class="sm" onclick="quickParty()">+ New</button></div></div>${head}
+    ${t!=='sales'?`<div><label>${t==='purchase'?'Supplier bill no':t==='cn'?'Original invoice no':'Original bill no'}</label>${I('refNo')}</div>`:''}
+    ${c.gstReg?`<div><label>Place of supply</label><select data-f="pos" data-rr="pos">${stateOpts(v.pos||c.state)}</select></div>`:''}</div>
+    ${linesHTML(c,v)}
+    <div class="f" style="margin-top:12px"><div><label>${sale?(t==='sales'?'Sales ledger':'Returns ledger'):(t==='purchase'?'Purchase / expense ledger':'Returns ledger')}</label>${accSelect(c,'data-f="ledger"',t==='sales'||t==='cn'?inG('Sales Accounts'):inG('Purchase Accounts','Direct Expenses','Indirect Expenses','Fixed Assets'),v.ledger,'')}</div>
+    <div class="w2"><label>Narration / notes</label>${I('narr')}</div>
+    <div style="padding-top:18px">${!sale&&c.gstReg?`<label style="display:flex;gap:6px;align-items:center;color:var(--ink)"><input type="checkbox" style="width:auto" data-f="itc" ${v.itc!==false?'checked':''}> Eligible for ITC</label>`:''}<label style="display:flex;gap:6px;align-items:center;color:var(--ink)"><input type="checkbox" style="width:auto" data-f="noRound" ${v.noRound?'checked':''}> Don't round off</label></div></div>
+    <div class="tot-panel" id="tp"></div>`}
+  if(t==='receipt'||t==='payment'){const rc=t==='receipt';
+    return`<div class="f"><div class="w2"><label>${rc?'Received from':'Paid to'} (party / ledger)</label>${accSelect(c,'data-f="accId"',a=>!['Cash-in-Hand','Bank Accounts'].includes(a.group),v.accId)}</div>${head}
+    <div><label>${rc?'Deposit to':'Paid from'}</label>${accSelect(c,'data-f="modeAcc"',inG('Cash-in-Hand','Bank Accounts'),v.modeAcc,'')}</div><div><label>Amount (gross) *</label>${I('amount','number','step="0.01"')}</div>
+    <div><label>TDS ${rc?'deducted by payer':'deducted by you'}</label>${I('tds','number','step="0.01"')}</div><div><label>Ref / cheque / UTR</label>${I('ref')}</div><div class="w2"><label>Narration (e.g. against invoice no.)</label>${I('narr')}</div></div><div class="tot-panel" id="tp"></div>`}
+  if(t==='expense')return`<div class="f"><div class="w2"><label>Expense ledger *</label>${accSelect(c,'data-f="ledger"',inG('Direct Expenses','Indirect Expenses','Fixed Assets'),v.ledger)}</div>${head}
+    <div><label>Amount before GST *</label>${I('amount','number','step="0.01"')}</div>${c.gstReg?`<div><label>GST %</label><select data-f="gst">${GSTR.map(r=>`<option${+v.gst===r?' selected':''}>${r}</option>`).join('')}</select></div>
+    <div style="padding-top:18px"><label style="display:flex;gap:6px;align-items:center;color:var(--ink)"><input type="checkbox" style="width:auto" data-f="inter" ${v.inter?'checked':''}> Inter-state (IGST)</label><label style="display:flex;gap:6px;align-items:center;color:var(--ink)"><input type="checkbox" style="width:auto" data-f="itc" ${v.itc!==false?'checked':''}> Eligible for ITC</label></div>`:''}
+    <div class="w2"><label>Paid via</label>${accSelect(c,'data-f="modeAcc"',inG('Cash-in-Hand','Bank Accounts','Sundry Creditors'),v.modeAcc,'')}</div><div><label>Bill / ref no</label>${I('refNo')}</div><div class="w2"><label>Narration</label>${I('narr')}</div></div><div class="tot-panel" id="tp"></div>`;
+  if(t==='contra')return`<div class="f"><div><label>From (credit)</label>${accSelect(c,'data-f="from"',inG('Cash-in-Hand','Bank Accounts'),v.from,'')}</div><div><label>To (debit)</label>${accSelect(c,'data-f="to"',inG('Cash-in-Hand','Bank Accounts'),v.to,'')}</div>${head}<div><label>Amount *</label>${I('amount','number','step="0.01"')}</div><div class="w2"><label>Narration</label>${I('narr')}</div></div>`;
+  return`<div class="f">${head}<div class="w2"><label>Narration</label>${I('narr')}</div></div><div class="tw"><table><thead><tr><th>Ledger</th><th class="n">Debit</th><th class="n">Credit</th><th></th></tr></thead><tbody>${v.lines.map((l,i)=>`<tr><td>${accSelect(c,`data-l="${i}.acc"`,()=>true,l.acc)}</td><td><input type="number" step="0.01" data-l="${i}.dr" value="${esc(l.dr)}"></td><td><input type="number" step="0.01" data-l="${i}.cr" value="${esc(l.cr)}"></td><td><button class="sm dng" onclick="rmLine(${i})">✕</button></td></tr>`).join('')}</tbody></table></div><button class="sm" onclick="addLine()" style="margin-top:6px">+ Add line</button><div class="tot-panel" id="tp"></div>`}
+function linesHTML(c,v){const g=c.gstReg;return`<div class="tw"><table style="min-width:820px"><thead><tr><th style="min-width:200px">Item / description</th><th>HSN/SAC</th><th class="n">Qty</th><th>Unit</th><th class="n">Rate</th><th class="n">Disc %</th>${g?'<th>GST %</th>':''}<th class="n">Amount</th><th></th></tr></thead><tbody>
+ ${v.lines.map((l,i)=>`<tr><td><input list="dl-items" data-l="${i}.desc" value="${esc(l.desc)}" placeholder="Type or pick item"></td><td style="width:100px"><input data-l="${i}.hsn" value="${esc(l.hsn)}"></td><td style="width:80px"><input type="number" step="any" data-l="${i}.qty" value="${esc(l.qty)}"></td><td style="width:70px"><input data-l="${i}.unit" value="${esc(l.unit)}"></td><td style="width:110px"><input type="number" step="any" data-l="${i}.rate" value="${esc(l.rate)}"></td><td style="width:70px"><input type="number" step="any" data-l="${i}.disc" value="${esc(l.disc)}"></td>${g?`<td style="width:80px"><select data-l="${i}.gst">${GSTR.map(r=>`<option${+l.gst===r?' selected':''}>${r}</option>`).join('')}</select></td>`:''}<td class="n" id="lt${i}" style="width:110px">0.00</td><td><button class="sm dng" onclick="rmLine(${i})">✕</button></td></tr>`).join('')}</tbody></table></div>
+ <datalist id="dl-items">${c.items.map(i=>`<option value="${esc(i.name)}">`).join('')}</datalist><button class="sm" style="margin-top:6px" onclick="addLine()">+ Add line</button>`}
+function drawForm(){const c=C(),v=F;FM.firstChild.innerHTML=`<h3>${v.id?'Edit':'New'} ${TYPES[v.type].name}</h3>${formBody(c,v)}<div class="foot"><button onclick="closeModal(FM)">Cancel</button><button class="pri" onclick="saveV(0)">Save</button>${v.type==='sales'?'<button class="pri" onclick="saveV(1)">Save &amp; Print</button>':''}</div>`;refreshTotals()}
+function addLine(){F.lines.push(F.type==='journal'?{acc:'',dr:'',cr:''}:blankLine());drawForm()}
+function rmLine(i){if(F.lines.length<=1&&INV.includes(F.type))return;F.lines.splice(i,1);drawForm()}
+function fInput(e){const el=e.target;if(el.dataset.f){F[el.dataset.f]=el.type==='checkbox'?el.checked:el.value;refreshTotals()}else if(el.dataset.l){const[i,k]=el.dataset.l.split('.');F.lines[+i][k]=el.value;refreshTotals()}}
+function fChange(e){const el=e.target,c=C();
+  if(el.dataset.l&&el.dataset.l.endsWith('.desc')){const i=+el.dataset.l.split('.')[0],it=c.items.find(x=>x.name.toLowerCase()===el.value.trim().toLowerCase());
+    if(it){Object.assign(F.lines[i],{desc:it.name,hsn:it.hsn||'',unit:it.unit||'',rate:it.rate||'',gst:it.gst??18});const row=el.closest('tr');['hsn','unit','rate','gst'].forEach(k=>{const x=$(`[data-l="${i}.${k}"]`,row);if(x)x.value=F.lines[i][k]});refreshTotals()}}
+  if(el.dataset.rr==='party'){const p=party(c,F.partyId);F.pos=p?.state||c.state;drawForm()}else if(el.dataset.rr==='pos')drawForm();
+  else if(el.dataset.f==='itc'||el.dataset.f==='inter')refreshTotals()}
+function refreshTotals(){const c=C(),v=F,t=v.type,el=$('#tp',FM);if(!el)return;const row=(a,b,cl='')=>`<div class="${cl}"><span>${a}</span><span>${b}</span></div>`;
+  if(INV.includes(t)){const T=calc(c,v);T.lines.forEach((l,i)=>{const e=$('#lt'+i,FM);if(e)e.textContent=fmt(l.total)});
+   el.innerHTML=row('Taxable value',fmt(T.taxable))+(c.gstReg?(T.intra?row('CGST',fmt(T.cgst))+row('SGST',fmt(T.sgst)):row('IGST',fmt(T.igst))):'')+row('Round off',fmt(T.round))+row('Total',fmt(T.total),'gt')}
+  else if(t==='expense'){const T=calcExp(c,v);el.innerHTML=row('Amount',fmt(T.taxable))+(c.gstReg?row('GST',fmt(T.cgst+T.sgst+T.igst)):'')+row('Total paid',fmt(T.total),'gt')}
+  else if(t==='receipt'||t==='payment'){const a=+v.amount||0,tds=+v.tds||0;el.innerHTML=row('Gross settled',fmt(a))+row('TDS',fmt(tds))+row(t==='receipt'?'Cash/bank received':'Cash/bank paid',fmt(a-tds),'gt')}
+  else if(t==='journal'){const d=r2(v.lines.reduce((s,l)=>s+(+l.dr||0),0)),k=r2(v.lines.reduce((s,l)=>s+(+l.cr||0),0));el.innerHTML=row('Total debit',fmt(d))+row('Total credit',fmt(k))+row('Difference',fmt(d-k),'gt')}}
+function validate(c,v){const t=v.type;if(!v.date)return'Enter a date';if(fyOf(v.date)<c.firstFY)return'Date is before the books start ('+c.firstFY+')';if(!v.no)return'Enter a voucher number';
+  const dup=c.vouchers.find(x=>x.type===t&&x.no===v.no&&x.id!==v.id&&fyOf(x.date)===fyOf(v.date));if(dup&&['sales','cn','dn','receipt','payment','expense','journal','contra'].includes(t))return'Voucher number '+v.no+' already exists in this FY';
+  if(INV.includes(t)){if(!v.partyId)return'Select a party';if(!calc(c,v).taxable)return'Add at least one line with quantity and rate';if(!v.ledger)return'Select a ledger'}
+  if(t==='receipt'||t==='payment'){if(!v.accId)return'Select the party / ledger';if(!(+v.amount>0))return'Enter amount';if(+v.tds>+v.amount)return'TDS cannot exceed amount'}
+  if(t==='expense'){if(!v.ledger)return'Select expense ledger';if(!(+v.amount>0))return'Enter amount'}
+  if(t==='contra'){if(!(+v.amount>0))return'Enter amount';if(v.from===v.to)return'From and To must differ'}
+  if(t==='journal'){const d=r2(v.lines.reduce((s,l)=>s+(+l.dr||0),0)),k=r2(v.lines.reduce((s,l)=>s+(+l.cr||0),0));if(!d||d!==k)return'Debit and credit must be equal and non-zero';if(v.lines.some(l=>(+l.dr||+l.cr)&&!l.acc))return'Select a ledger on every line'}return''}
+function saveV(pr){const c=C(),v=F,err=validate(c,v);if(err){toast(err);return}const cl=JSON.parse(JSON.stringify(v));
+  if(INV.includes(cl.type)){cl.lines=cl.lines.filter(l=>+l.qty*+l.rate>0).map(l=>({...l,qty:+l.qty,rate:+l.rate,disc:+l.disc||0,gst:+l.gst||0}));cl.pos=cl.pos||party(c,cl.partyId)?.state||c.state}
+  if(cl.type==='journal')cl.lines=cl.lines.filter(l=>+l.dr||+l.cr).map(l=>({acc:l.acc,dr:+l.dr||0,cr:+l.cr||0}));
+  ['amount','tds','gst'].forEach(k=>{if(k in cl)cl[k]=+cl[k]||0});
+  if(cl.id){c.vouchers[c.vouchers.findIndex(x=>x.id===cl.id)]=cl}else{cl.id='v'+uid();c.vouchers.push(cl)}
+  logAct((v.id?'Edited ':'Created ')+TYPES[cl.type].name+' '+cl.no+' ('+fmt(vTotal(c,cl))+')');const f=fyOf(cl.date);if(f!==FYS()){DB.fy=f;toast('Saved in FY '+f)}else toast('Saved');save();closeModal(FM);render();if(pr)viewV(cl.id)}
+
+/* ===================== view / print ===================== */
+function viewV(id){const c=C(),v=c.vouchers.find(x=>x.id===id);if(!v)return;
+  modal(`<div class="print-area">${INV.includes(v.type)?invoiceHTML(c,v):voucherHTML(c,v)}</div><div class="foot noprint"><button onclick="closeModal()">Close</button><button class="pri" onclick="printModal()">Print / Save as PDF</button></div>`,true)}
+function invoiceHTML(c,v){const T=calc(c,v),p=party(c,v.partyId)||{name:accName(c,v.partyId)},t=v.type,g=c.gstReg;
+  const title=t==='sales'?(g?'TAX INVOICE':'BILL OF SUPPLY'):t==='cn'?'CREDIT NOTE':t==='dn'?'DEBIT NOTE':'PURCHASE BILL';const pos=v.pos||p.state||c.state;
+  return`<div class="inv"><div class="hd"><div><h4>${esc(c.name)}</h4>${esc(c.address||'')}<br>${c.gstin?'GSTIN: '+esc(c.gstin)+' &nbsp;':''}${c.pan?'PAN: '+esc(c.pan):''}<br>${esc(c.phone||'')} ${esc(c.email||'')}</div>
+  <div><div class="ttl">${title}</div><div class="r">No: <b>${esc(v.no)}</b><br>Date: ${dmy(v.date)}${v.refNo?`<br>Ref: ${esc(v.refNo)}`:''}</div></div></div>
+  <div style="display:flex;justify-content:space-between;gap:20px;margin-bottom:10px"><div><span class="mut">${t==='sales'||t==='cn'?'Bill to':'Supplier'}</span><br><b>${esc(p.name)}</b><br>${esc(p.address||'')}<br>${p.gstin?'GSTIN: '+esc(p.gstin):''}</div>${g?`<div class="r"><span class="mut">Place of supply</span><br>${pos} - ${esc(STATES[pos]||'')}</div>`:''}</div>
+  <table><thead><tr><th>#</th><th>Description</th><th>HSN/SAC</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">Disc%</th><th class="n">Taxable</th>${g?'<th class="n">GST%</th><th class="n">Tax</th>':''}<th class="n">Amount</th></tr></thead><tbody>
+  ${T.lines.map((l,i)=>`<tr><td>${i+1}</td><td>${esc(l.desc)}</td><td>${esc(l.hsn)}</td><td class="n">${l.qty} ${esc(l.unit)}</td><td class="n">${fmt(l.rate)}</td><td class="n">${l.disc||''}</td><td class="n">${fmt(l.taxable)}</td>${g?`<td class="n">${l.gr||0}</td><td class="n">${fmt(l.cgst+l.sgst+l.igst)}</td>`:''}<td class="n">${fmt(l.total)}</td></tr>`).join('')}</tbody></table>
+  <div style="display:flex;justify-content:space-between;gap:20px;margin-top:10px"><div style="flex:1"><b>Amount in words:</b> Rupees ${words(T.total)} Only<br>${v.narr?`<span class="mut">${esc(v.narr)}</span><br>`:''}${t==='sales'&&(c.bank.ac||c.bank.upi)?`<br><b>Bank details</b><br>${esc(c.bank.name)} ${c.bank.ac?'A/c '+esc(c.bank.ac):''} ${c.bank.ifsc?'IFSC '+esc(c.bank.ifsc):''}<br>${c.bank.upi?'UPI: '+esc(c.bank.upi):''}`:''}</div>
+  <div class="tot-panel" style="margin:0;min-width:230px"><div><span>Taxable value</span><span>${fmt(T.taxable)}</span></div>${g?(T.intra?`<div><span>CGST</span><span>${fmt(T.cgst)}</span></div><div><span>SGST</span><span>${fmt(T.sgst)}</span></div>`:`<div><span>IGST</span><span>${fmt(T.igst)}</span></div>`):''}${T.round?`<div><span>Round off</span><span>${fmt(T.round)}</span></div>`:''}<div class="gt"><span>Total</span><span>₹ ${fmt(T.total)}</span></div></div></div>
+  <div class="r" style="margin-top:36px">For <b>${esc(c.name)}</b><br><br>Authorised Signatory</div></div>`}
+function voucherHTML(c,v){const E=EV(c)[v.id]||[];return`<div class="inv"><div class="hd"><div><h4>${esc(c.name)}</h4>${esc(c.address||'')}</div><div><div class="ttl">${TYPES[v.type].name.toUpperCase()} VOUCHER</div><div class="r">No: <b>${esc(v.no)}</b><br>Date: ${dmy(v.date)}${v.ref?`<br>Ref: ${esc(v.ref)}`:''}</div></div></div>
+ <table><thead><tr><th>Particulars</th><th class="n">Debit</th><th class="n">Credit</th></tr></thead><tbody>${E.map(e=>`<tr><td>${esc(accName(c,e.acc))}</td><td class="n">${z(e.dr)}</td><td class="n">${z(e.cr)}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="n">${fmt(E.reduce((s,e)=>s+e.dr,0))}</td><td class="n">${fmt(E.reduce((s,e)=>s+e.cr,0))}</td></tr></tbody></table>${v.narr?`<p><b>Narration:</b> ${esc(v.narr)}</p>`:''}<div class="r" style="margin-top:36px">Authorised Signatory</div></div>`}
+
+/* ===================== masters ===================== */
+function partyModal(id,preset,cb){const c=C(),p=id?party(c,id):{type:'customer',state:c.state,...preset},a=id?amap(c)[id]:{opening:0,ot:p.type==='supplier'?'Cr':'Dr'};
+  const f=(i,l,v,ex='')=>`<div><label>${l}</label><input id="pf_${i}" value="${esc(v??'')}" ${ex}></div>`;
+  const m=modal(`<h3>${id?'Edit':'New'} party</h3><div class="f"><div class="w2"><label>Name *</label><input id="pf_name" value="${esc(p.name||'')}"></div>
+  <div><label>Type</label><select id="pf_type" ${id?'disabled':''} onchange="$('#pf_ot').value=this.value==='supplier'?'Cr':'Dr'"><option value="customer"${p.type==='customer'?' selected':''}>Customer (Debtor)</option><option value="supplier"${p.type==='supplier'?' selected':''}>Supplier (Creditor)</option></select></div>
+  <div><label>GSTIN</label><input id="pf_gstin" value="${esc(p.gstin||'')}" maxlength="15" style="text-transform:uppercase" oninput="pfG(this)"></div>${f('pan','PAN',p.pan,'maxlength=10')}
+  <div><label>State</label><select id="pf_state">${stateOpts(p.state)}</select></div>${f('phone','Phone',p.phone)}${f('email','Email',p.email)}<div class="w2"><label>Address</label><input id="pf_address" value="${esc(p.address||'')}"></div>
+  <div><label>Opening balance</label><input id="pf_open" type="number" step="0.01" value="${a.opening||''}"></div><div><label>Dr / Cr</label><select id="pf_ot"><option${a.ot==='Dr'?' selected':''}>Dr</option><option${a.ot==='Cr'?' selected':''}>Cr</option></select></div></div>
+  <div class="foot"><button onclick="closeModal()">Cancel</button><button class="pri" id="pf_save">Save</button></div>`);
+  $('#pf_save').onclick=()=>{const v=i=>$('#pf_'+i).value.trim();if(!v('name')){toast('Name required');return}
+   const o={name:v('name'),gstin:v('gstin').toUpperCase(),pan:v('pan').toUpperCase(),state:v('state'),phone:v('phone'),email:v('email'),address:v('address')};const type=$('#pf_type').value;
+   let pid=id;if(id)Object.assign(p,o);else{pid='p'+uid();c.parties.push({id:pid,type,...o})}const pp=party(c,pid);
+   let acc=amap(c)[pid];if(!acc){acc={id:pid,name:o.name,group:type==='supplier'?'Sundry Creditors':'Sundry Debtors',opening:0,ot:'Dr',party:1};c.accounts.push(acc)}
+   acc.name=o.name;acc.opening=+v('open')||0;acc.ot=v('ot');save();closeModal();if(cb)cb(pid);else render();toast('Party saved')}}
+function pfG(el){const g=el.value.toUpperCase();if(g.length>=2&&STATES[g.slice(0,2)])$('#pf_state').value=g.slice(0,2);if(g.length===15)$('#pf_pan').value=g.slice(2,12)}
+function quickParty(){const t=F.type;partyModal(null,{type:t==='sales'||t==='cn'?'customer':'supplier'},pid=>{F.partyId=pid;F.pos=party(C(),pid)?.state||C().state;drawForm()})}
+PAGES.parties=c=>{const q=FLT.q.toLowerCase(),tb=TB(c,FYS());const rows=c.parties.filter(p=>!q||(p.name+p.gstin+p.phone).toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name));
+  CUR={title:'Parties',aoa:[['Name','Type','GSTIN','PAN','State','Phone','Email','Address','Closing balance'],...rows.map(p=>[p.name,p.type,p.gstin,p.pan,STATES[p.state],p.phone,p.email,p.address,tb[p.id]?.close||0])]};
+  return`<h1>Parties</h1><div class="bar noprint"><button class="pri" onclick="partyModal()">+ New party</button><input placeholder="Search…" value="${esc(FLT.q)}" onchange="FLT.q=this.value;render()"><span class="sp"></span><button onclick="pickImport('parties')">Import Excel/CSV</button><button onclick="partyTemplate()">Template</button><button onclick="expXlsx()">Export Excel</button></div>
+  <div class="tw"><table><thead><tr><th>Name</th><th>Type</th><th>GSTIN</th><th>State</th><th>Phone</th><th class="n">Closing balance (FY ${FYS()})</th><th></th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.name)}</td><td><span class="tag ${p.type==='customer'?'g':'y'}">${p.type}</span></td><td>${esc(p.gstin)}</td><td>${esc(STATES[p.state]||'')}</td><td>${esc(p.phone)}</td><td class="n">${drcr(tb[p.id]?.close||0)}</td><td class="n"><button class="sm" onclick="partyModal('${p.id}')">Edit</button> <button class="sm dng" onclick="delParty('${p.id}')">Del</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">No parties yet.</td></tr>'}</tbody></table></div>`};
+function delParty(id){const c=C();if(c.vouchers.some(v=>vEntries(c,v).some(e=>e.acc===id)||v.partyId===id)){toast('Party has transactions — cannot delete');return}if(!confirm('Delete party?'))return;c.parties=c.parties.filter(p=>p.id!==id);c.accounts=c.accounts.filter(a=>a.id!==id);save();render()}
+function itemModal(id){const c=C(),it=id?c.items.find(x=>x.id===id):{type:'Service',gst:18,unit:'',rate:''};
+  modal(`<h3>${id?'Edit':'New'} item / service</h3><div class="f"><div class="w2"><label>Name *</label><input id="if_name" value="${esc(it.name||'')}"></div><div><label>Type</label><select id="if_type"><option${it.type==='Service'?' selected':''}>Service</option><option${it.type==='Goods'?' selected':''}>Goods</option></select></div>
+  <div><label>HSN / SAC</label><input id="if_hsn" value="${esc(it.hsn||'')}"></div><div><label>Unit</label><input id="if_unit" value="${esc(it.unit||'')}"></div><div><label>Default rate</label><input id="if_rate" type="number" step="any" value="${esc(it.rate)}"></div>
+  <div><label>GST %</label><select id="if_gst">${GSTR.map(r=>`<option${+it.gst===r?' selected':''}>${r}</option>`).join('')}</select></div></div><div class="foot"><button onclick="closeModal()">Cancel</button><button class="pri" id="if_save">Save</button></div>`);
+  $('#if_save').onclick=()=>{const v=i=>$('#if_'+i).value.trim();if(!v('name')){toast('Name required');return}const o={name:v('name'),type:v('type'),hsn:v('hsn'),unit:v('unit'),rate:+v('rate')||0,gst:+v('gst')};
+   if(id)Object.assign(it,o);else c.items.push({id:'i'+uid(),...o});save();closeModal();render()}}
+PAGES.items=c=>{CUR={title:'Items',aoa:[['Name','Type','HSN/SAC','Unit','Rate','GST %'],...c.items.map(i=>[i.name,i.type,i.hsn,i.unit,i.rate,i.gst])]};
+  return`<h1>Items &amp; Services</h1><div class="bar noprint"><button class="pri" onclick="itemModal()">+ New item</button><span class="sp"></span><button onclick="pickImport('items')">Import Excel/CSV</button><button onclick="itemTemplate()">Template</button><button onclick="expXlsx()">Export Excel</button></div>
+  <div class="tw"><table><thead><tr><th>Name</th><th>Type</th><th>HSN/SAC</th><th>Unit</th><th class="n">Rate</th><th class="n">GST %</th><th></th></tr></thead><tbody>${c.items.map(i=>`<tr><td>${esc(i.name)}</td><td>${i.type}</td><td>${esc(i.hsn)}</td><td>${esc(i.unit)}</td><td class="n">${fmt(i.rate)}</td><td class="n">${i.gst}</td><td class="n"><button class="sm" onclick="itemModal('${i.id}')">Edit</button> <button class="sm dng" onclick="delItem('${i.id}')">Del</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">No items yet — you can also type descriptions directly on invoices.</td></tr>'}</tbody></table></div>`};
+function delItem(id){if(!confirm('Delete item?'))return;const c=C();c.items=c.items.filter(i=>i.id!==id);save();render()}
+function ledgerModal(id){const c=C(),a=id?amap(c)[id]:{group:'Indirect Expenses',opening:0,ot:'Dr'};
+  modal(`<h3>${id?'Edit':'New'} ledger</h3><div class="f"><div class="w2"><label>Name *</label><input id="lf_name" value="${esc(a.name||'')}"></div><div class="w2"><label>Group</label><select id="lf_group" ${id&&(a.sys||a.party)?'disabled':''}>${Object.keys(GROUPS).filter(g=>!['Sundry Debtors','Sundry Creditors'].includes(g)||a.group===g).map(g=>`<option${g===a.group?' selected':''}>${g}</option>`).join('')}</select></div>
+  <div><label>Opening balance</label><input id="lf_open" type="number" step="0.01" value="${a.opening||''}"></div><div><label>Dr / Cr</label><select id="lf_ot"><option${a.ot==='Dr'?' selected':''}>Dr</option><option${a.ot==='Cr'?' selected':''}>Cr</option></select></div></div>
+  <p class="mut">Opening balance applies to balance-sheet ledgers as on the first day of the books' first FY. Income/expense ledgers always start at zero each FY.</p>
+  <div class="foot"><button onclick="closeModal()">Cancel</button><button class="pri" id="lf_save">Save</button></div>`);
+  $('#lf_save').onclick=()=>{const v=i=>$('#lf_'+i).value.trim();if(!v('name')){toast('Name required');return}if(id){a.name=v('name');a.group=v('group');a.opening=+v('open')||0;a.ot=v('ot')}else c.accounts.push({id:'a'+uid(),name:v('name'),group:v('group'),opening:+v('open')||0,ot:v('ot')});save();closeModal();render()}}
+function delLedger(id){const c=C(),a=amap(c)[id];if(a.sys||a.party){toast('System / party ledgers cannot be deleted');return}if(ENT(c).some(e=>e.acc===id)||c.vouchers.some(v=>v.ledger===id||v.accId===id||v.modeAcc===id)){toast('Ledger is used in entries');return}if(!confirm('Delete ledger?'))return;c.accounts=c.accounts.filter(x=>x.id!==id);save();render()}
+PAGES.ledgers=c=>{const tb=TB(c,FYS());CUR={title:'Ledgers',aoa:[['Ledger','Group','Opening (FY)','Debit','Credit','Closing'],...c.accounts.map(a=>{const t=tb[a.id];return[a.name,a.group,t.open,t.dr,t.cr,t.close]})]};
+  return`<h1>Ledgers (Chart of Accounts)</h1><div class="bar noprint"><button class="pri" onclick="ledgerModal()">+ New ledger</button>${toolbar()}</div><div class="tw"><table><thead><tr><th>Ledger</th><th>Group</th><th class="n">Opening</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Closing</th><th class="noprint"></th></tr></thead><tbody>${[...c.accounts].sort((a,b)=>Object.keys(GROUPS).indexOf(a.group)-Object.keys(GROUPS).indexOf(b.group)||a.name.localeCompare(b.name)).map(a=>{const t=tb[a.id];return`<tr><td>${esc(a.name)}</td><td class="mut">${a.group}</td><td class="n">${isNom(a.group)?'':drcr(t.open)}</td><td class="n">${z(t.dr)}</td><td class="n">${z(t.cr)}</td><td class="n">${drcr(t.close)}</td><td class="n noprint">${a.party?'<span class="mut">via Parties</span>':`<button class="sm" onclick="ledgerModal('${a.id}')">Edit</button> ${a.sys?'':`<button class="sm dng" onclick="delLedger('${a.id}')">Del</button>`}`}</td></tr>`}).join('')}</tbody></table></div>`};
+/* ===================== auth, vault & cloud sync ===================== */
+const CONFIG={firm:'KRN Audit Consultancy',product:'Accounting ERP',vaultPath:'data/vault.json',idleMin:20,iter:250000};
+const VKEY='krn_erp_vault_v1',DTOK='krn_erp_devtoken',RKEY='krn_erp_repo',OLDKEY='krn_billing_v1';
+const te=new TextEncoder(),td=new TextDecoder();
+let VAULT=null,SESSION=null,REMOTE='n/a',SYNC={sha:null},lastAct=Date.now(),persistT,pushT,loginFails=0;
+const b64e=u=>{let s='';u.forEach(b=>s+=String.fromCharCode(b));return btoa(s)};
+const b64d=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const rnd=n=>crypto.getRandomValues(new Uint8Array(n));
+async function kdf(pw,salt,iter){const k=await crypto.subtle.importKey('raw',te.encode(pw),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:iter,hash:'SHA-256'},k,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function wrapSlot(raw,pw,user){const salt=rnd(16),iv=rnd(12),key=await kdf(pw,salt,CONFIG.iter);const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,raw);return{user,salt:b64e(salt),iv:b64e(iv),ct:b64e(new Uint8Array(ct)),iter:CONFIG.iter}}
+async function openSlot(slot,pw){const key=await kdf(pw,b64d(slot.salt),slot.iter);return new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64d(slot.iv)},key,b64d(slot.ct)))}
+const importDek=raw=>crypto.subtle.importKey('raw',raw,'AES-GCM',false,['encrypt','decrypt']);
+async function encData(dek,obj){const iv=rnd(12),ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},dek,te.encode(JSON.stringify(obj)));return{iv:b64e(iv),ct:b64e(new Uint8Array(ct))}}
+async function decData(dek,d){return JSON.parse(td.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64d(d.iv)},dek,b64d(d.ct))))}
+const freshDB=n=>({v:1,active:null,fy:null,companies:{},lastExport:null,meta:{clientName:n||''},sync:{},log:[]});
+function logAct(a){if(!DB||!SESSION)return;DB.log=DB.log||[];DB.log.push({t:Date.now(),u:SESSION.user,a});if(DB.log.length>800)DB.log.splice(0,DB.log.length-800)}
+function setStatus(t){const e=$('#syncst');if(e)e.textContent=t;setStatus.last=t}
+
+/* ---- GitHub contents API ---- */
+const repoCoords=()=>{try{const r=JSON.parse(localStorage.getItem(RKEY));if(r&&r.owner&&r.repo)return r}catch(e){}
+  if(location.hostname.endsWith('.github.io'))return{owner:location.hostname.split('.')[0],repo:location.pathname.split('/')[1]||location.hostname,branch:'main'};return null};
+async function ghGet(s,token){const h={Accept:'application/vnd.github+json'};if(token)h.Authorization='Bearer '+token;
+  const url=`https://api.github.com/repos/${s.owner}/${s.repo}/contents/${s.path}?ref=${encodeURIComponent(s.branch||'main')}&_=${Date.now()}`;
+  const r=await fetch(url,{headers:h,cache:'no-store'});if(r.status===404)return null;if(!r.ok)throw new Error('GitHub '+r.status);const j=await r.json();let text;
+  if(j.content&&j.encoding==='base64')text=td.decode(b64d(j.content.replace(/\s/g,'')));else{const r2=await fetch(url,{headers:{...h,Accept:'application/vnd.github.raw+json'},cache:'no-store'});text=await r2.text()}return{sha:j.sha,text}}
+async function ghPut(s,text,sha){const r=await fetch(`https://api.github.com/repos/${s.owner}/${s.repo}/contents/${s.path}`,{method:'PUT',headers:{Accept:'application/vnd.github+json',Authorization:'Bearer '+s.token,'Content-Type':'application/json'},body:JSON.stringify({message:'ERP data sync '+new Date().toISOString(),content:btoa(text),branch:s.branch||'main',...(sha?{sha}:{})})});
+  if(r.status===409||r.status===422){const e=new Error('conflict');e.conflict=true;throw e}if(!r.ok)throw new Error('GitHub '+r.status);return(await r.json()).content.sha}
+const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,j)=>setTimeout(()=>j(new Error('timeout')),ms))]);
+const canSync=()=>DB&&DB.sync&&DB.sync.token&&DB.sync.owner&&DB.sync.repo;
+
+/* ---- persistence ---- */
+function queuePersist(){clearTimeout(persistT);persistT=setTimeout(persist,300);setStatus('Saving…')}
+async function persist(){if(!SESSION||!DB)return;VAULT.data=await encData(SESSION.dek,DB);VAULT.updatedAt=Date.now();VAULT.meta={client:DB.meta?.clientName||''};
+  try{localStorage.setItem(VKEY,JSON.stringify(VAULT))}catch(e){toast('Could not save on this device — storage full/blocked')}setStatus('Saved on this device');if(canSync()){clearTimeout(pushT);pushT=setTimeout(pushVault,2500)}}
+async function pushVault(){if(!canSync())return;const s={...DB.sync,path:CONFIG.vaultPath};setStatus('Syncing…');const text=JSON.stringify(VAULT);
+  try{SYNC.sha=await ghPut(s,text,SYNC.sha);setStatus('Synced to cloud ✓')}
+  catch(e){if(!e.conflict){setStatus('Cloud sync failed — '+e.message);return}
+    try{const r=await ghGet(s,s.token);if(!r){SYNC.sha=await ghPut(s,text,null);setStatus('Synced to cloud ✓');return}
+      const rv=JSON.parse(r.text);
+      if(rv.updatedAt>VAULT.updatedAt&&confirm('Another device saved newer data to the cloud.\n\nOK = load the cloud version (this device\'s unsynced changes are downloaded as a backup first).\nCancel = overwrite the cloud with this device\'s version.')){
+        download(`unsynced_backup_${today()}.json`,JSON.stringify({format:'KRN-BILLING-BACKUP',version:1,companies:DB.companies}));await adoptRemote(rv,r.sha)}
+      else{SYNC.sha=await ghPut(s,text,r.sha);setStatus('Synced to cloud ✓')}}
+    catch(e2){setStatus('Cloud sync failed — '+e2.message)}}}
+async function adoptRemote(rv,sha){const data=await decData(SESSION.dek,rv.data);const keep=DB.sync;DB=data;DB.sync=keep;VAULT=rv;localStorage.setItem(VKEY,JSON.stringify(VAULT));SYNC.sha=sha;MC.clear();REV++;setStatus('Loaded from cloud ✓');render()}
+async function pullLatest(){if(!canSync())return;try{const r=await withTimeout(ghGet({...DB.sync,path:CONFIG.vaultPath},DB.sync.token),8000);if(!r){schedPush();return}SYNC.sha=r.sha;const rv=JSON.parse(r.text);
+  if(rv.updatedAt>VAULT.updatedAt){await adoptRemote(rv,r.sha);toast('Loaded latest data from cloud')}else if(rv.updatedAt<VAULT.updatedAt)schedPush();else setStatus('Synced to cloud ✓')}catch(e){setStatus('Cloud unreachable — working offline')}}
+const schedPush=()=>{clearTimeout(pushT);pushT=setTimeout(pushVault,500)};
+async function syncNow(){if(!canSync()){toast('Add the GitHub details first');return}await persist();await pushVault();toast($('#syncst')?.textContent||'Done')}
+
+/* ---- boot / login / setup ---- */
+async function boot(){document.body.classList.add('locked');let local=null;try{local=JSON.parse(localStorage.getItem(VKEY))}catch(e){}VAULT=local;REMOTE='n/a';
+  const rc=repoCoords();if(rc){try{const r=await withTimeout(ghGet({...rc,path:CONFIG.vaultPath},localStorage.getItem(DTOK)||''),7000);if(r){const rv=JSON.parse(r.text);SYNC.sha=r.sha;if(!VAULT||rv.updatedAt>VAULT.updatedAt){VAULT=rv;localStorage.setItem(VKEY,r.text)}REMOTE='ok'}else REMOTE='none'}catch(e){REMOTE='fail'}}
+  if(!location.hash)location.hash='#/dash';render()}
+function authShell(inner){return`<div style="min-height:88vh;display:flex;align-items:center;justify-content:center;padding:16px"><div class="card" style="width:100%;max-width:${VAULT?'400':'620'}px;padding:28px;box-shadow:0 12px 40px rgba(20,27,52,.12)"><div style="font-size:20px;font-weight:700;color:var(--pri)">${esc(CONFIG.firm)}</div><div class="mut" style="margin-bottom:18px">${CONFIG.product}${VAULT?.meta?.client?' — '+esc(VAULT.meta.client):''}</div>${inner}</div></div>`}
+const devTokField=()=>`<details style="margin-top:14px"><summary class="mut" style="cursor:pointer">Private repository? Device access token</summary><p class="mut">If this app's data repository is private, paste the read token your administrator gave you. It is kept on this device only.</p><div class="bar"><input id="dtok" placeholder="github_pat_…" value="${esc(localStorage.getItem(DTOK)||'')}"><button onclick="localStorage.setItem(DTOK,$('#dtok').value.trim());boot()">Save &amp; retry</button></div></details>`;
+function drawLogin(){const m=$('#main');
+  if(!VAULT){if(REMOTE==='fail'){m.innerHTML=authShell(`<p class="bad">Couldn't reach the cloud to check for existing data.</p><p class="mut">Check your internet connection and retry. (This stops a duplicate set-up from overwriting existing books.)</p><button class="pri" onclick="boot()">Retry</button>${devTokField()}`);return}m.innerHTML=setupHTML();return}
+  m.innerHTML=authShell(`<form onsubmit="doLogin();return false"><div style="margin-bottom:10px"><label>Username</label><input id="lg_u" autocomplete="username" autofocus></div><div style="margin-bottom:12px"><label>Password</label><input id="lg_p" type="password" autocomplete="current-password"></div><div id="lg_e" class="bad" style="min-height:20px"></div><button class="pri" style="width:100%" type="submit">Sign in</button></form>${REMOTE==='fail'?'<p class="warn">Offline — using the copy saved on this device.</p>':''}${devTokField()}<p class="mut" style="margin:16px 0 0;font-size:12px">Your books are encrypted with your password. Nobody — including this website — can read them without it.</p>`)}
+async function doLogin(){const u=$('#lg_u').value.trim().toLowerCase(),p=$('#lg_p').value,e=$('#lg_e');e.textContent='';
+  const sl=VAULT.slots;let slot=null,role=null;if(u==='admin'){slot=sl.admin;role='admin'}else if(sl.client&&sl.client.user.toLowerCase()===u){slot=sl.client;role='client'}
+  await new Promise(r=>setTimeout(r,Math.min(loginFails*700,6000)));
+  try{if(!slot)throw 0;const raw=await openSlot(slot,p);const dek=await importDek(raw);DB=await decData(dek,VAULT.data);SESSION={user:role==='admin'?'admin':slot.user,role,dek,raw};loginFails=0;DB.sync=DB.sync||{};logAct('Signed in');
+    document.body.classList.remove('locked');await pullLatest();startIdle();if(!location.hash||location.hash==='#/')location.hash='#/dash';render()}
+  catch(err){loginFails++;e.textContent='Invalid username or password'}}
+async function logout(auto){if(!SESSION)return;clearTimeout(persistT);logAct(auto?'Auto-locked (idle)':'Signed out');await persist();if(canSync()){clearTimeout(pushT);try{await withTimeout(pushVault(),6000)}catch(e){}}
+  DB=null;SESSION=null;MC.clear();document.body.classList.add('locked');$('#modals').innerHTML='';render()}
+function startIdle(){['mousemove','keydown','click','touchstart'].forEach(ev=>document.addEventListener(ev,()=>lastAct=Date.now(),{passive:true}));setInterval(()=>{if(SESSION&&Date.now()-lastAct>CONFIG.idleMin*60000)logout(true)},30000);document.addEventListener('visibilitychange',()=>{if(document.hidden&&SESSION){clearTimeout(persistT);persist()}})}
+function setupHTML(){const rc=repoCoords()||{},old=(()=>{try{return!!JSON.parse(localStorage.getItem(OLDKEY)).companies}catch(e){return false}})();const f=(i,l,t='text',v='')=>`<div><label>${l}</label><input id="su_${i}" type="${t}" value="${esc(v)}"></div>`;
+  return authShell(`<h2 style="margin-top:0">First-time setup for this client</h2><p class="mut">Done once by the administrator. The books are stored encrypted — passwords are never saved anywhere readable.</p>
+  <div class="f">${f('client','Client / business name *')}${f('cuser','Client username *','text','client')}${f('cpw','Client password * (min 8)','password')}${f('cpw2','Confirm client password','password')}</div>
+  <div class="f">${f('apw','Administrator password * (yours — opens any client\'s books)','password')}${f('apw2','Confirm administrator password','password')}</div>
+  <h2>Cloud sync <span class="mut" style="font-weight:400;font-size:12px">(optional — lets the client use any device)</span></h2><div class="f">${f('owner','GitHub owner',  'text',rc.owner||'')}${f('repo','Repository','text',rc.repo||'')}${f('branch','Branch','text',rc.branch||'main')}${f('token','Fine-grained token (Contents: read & write on this repo only)','password')}</div>
+  ${old?`<label style="display:flex;gap:6px;align-items:center;color:var(--ink)"><input type="checkbox" id="su_old" style="width:auto" checked> Import the books already saved in this browser (earlier version)</label>`:''}
+  ${REMOTE==='none'?'<p class="mut">Cloud check: no existing data found for this repository.</p>':''}<div class="foot"><button class="pri" onclick="doSetup()">Create &amp; sign in</button></div>${devTokField()}`)}
+async function doSetup(){const v=i=>$('#su_'+i).value;const name=v('client').trim(),cu=v('cuser').trim();
+  if(!name||!cu){toast('Client name and username are required');return}if(cu.toLowerCase()==='admin'){toast('"admin" is reserved');return}
+  if(v('cpw').length<8||v('apw').length<8){toast('Passwords need at least 8 characters');return}if(v('cpw')!==v('cpw2')||v('apw')!==v('apw2')){toast('Password confirmation does not match');return}
+  const raw=rnd(32),dek=await importDek(raw);VAULT={v:1,slots:{admin:await wrapSlot(raw,v('apw'),'admin'),client:await wrapSlot(raw,v('cpw'),cu)},data:null,updatedAt:0,meta:{client:name}};
+  DB=freshDB(name);if($('#su_old')?.checked){try{const o=JSON.parse(localStorage.getItem(OLDKEY));Object.assign(DB,{companies:o.companies,active:o.active,fy:o.fy,lastExport:o.lastExport})}catch(e){}}
+  const ow=v('owner').trim(),rp=v('repo').trim();if(ow&&rp){DB.sync={owner:ow,repo:rp,branch:v('branch').trim()||'main',token:v('token').trim()};localStorage.setItem(RKEY,JSON.stringify({owner:ow,repo:rp,branch:DB.sync.branch}))}
+  SESSION={user:'admin',role:'admin',dek,raw};logAct('Client workspace created');document.body.classList.remove('locked');await persist();if(canSync())await pushVault();startIdle();location.hash='#/dash';render();toast('Workspace created — share the client username and password with your client')}
+
+/* ---- access & sync settings ---- */
+function accessCards(){if(!SESSION)return'';const adm=SESSION.role==='admin',s=DB.sync||{};
+  let h=`<div class="card"><h2 style="margin-top:0">My password</h2><div class="f"><div><label>Current password</label><input id="pw_o" type="password"></div><div><label>New password (min 8)</label><input id="pw_n" type="password"></div><div><label>Confirm</label><input id="pw_n2" type="password"></div></div><button class="pri" onclick="changeMyPw()">Change password</button> <span class="mut">Signed in as <b>${esc(SESSION.user)}</b> (${SESSION.role})</span></div>`;
+  if(adm)h+=`<div class="card"><h2 style="margin-top:0">Client login <span class="mut" style="font-weight:400;font-size:12px">(administrator only)</span></h2><p class="mut">Current client username: <b>${esc(VAULT.slots.client.user)}</b>. Use this to reset a forgotten password or rename the login.</p><div class="f"><div><label>Client username</label><input id="rc_u" value="${esc(VAULT.slots.client.user)}"></div><div><label>New client password (min 8)</label><input id="rc_p" type="password"></div></div><button class="pri" onclick="resetClient()">Reset client login</button></div>
+  <div class="card"><h2 style="margin-top:0">Cloud sync (GitHub)</h2><p class="mut">Encrypted data is committed to <code>${esc(CONFIG.vaultPath)}</code> in this client's repository. Use a fine-grained token limited to this single repo (Contents: read &amp; write).</p><div class="f"><div><label>Owner</label><input id="sy_o" value="${esc(s.owner||repoCoords()?.owner||'')}"></div><div><label>Repository</label><input id="sy_r" value="${esc(s.repo||repoCoords()?.repo||'')}"></div><div><label>Branch</label><input id="sy_b" value="${esc(s.branch||'main')}"></div><div><label>Token</label><input id="sy_t" type="password" value="${esc(s.token||'')}"></div></div><div class="bar"><button class="pri" onclick="saveSync()">Save &amp; sync</button><button onclick="syncNow()">Sync now</button><span class="mut" id="syncst2">${esc(setStatus.last||'')}</span></div></div>
+  <div class="card"><h2 style="margin-top:0">Activity log</h2><div class="tw" style="max-height:340px;overflow:auto"><table><thead><tr><th>When</th><th>User</th><th>Action</th></tr></thead><tbody>${[...(DB.log||[])].reverse().slice(0,150).map(l=>`<tr><td>${new Date(l.t).toLocaleString()}</td><td>${esc(l.u)}</td><td>${esc(l.a)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty">Nothing yet.</td></tr>'}</tbody></table></div></div>`;
+  return h}
+const _st=PAGES.settings;PAGES.settings=c=>_st(c)+accessCards();
+async function changeMyPw(){const o=$('#pw_o').value,n=$('#pw_n').value;if(n.length<8){toast('New password needs 8+ characters');return}if(n!==$('#pw_n2').value){toast('Confirmation does not match');return}
+  const key=SESSION.role==='admin'?'admin':'client',slot=VAULT.slots[key];try{await openSlot(slot,o)}catch(e){toast('Current password is wrong');return}
+  VAULT.slots[key]=await wrapSlot(SESSION.raw,n,slot.user);logAct('Changed own password');await persist();toast('Password changed');render()}
+async function resetClient(){const u=$('#rc_u').value.trim(),p=$('#rc_p').value;if(!u||u.toLowerCase()==='admin'){toast('Enter a valid client username');return}if(p.length<8){toast('Password needs 8+ characters');return}
+  VAULT.slots.client=await wrapSlot(SESSION.raw,p,u);logAct('Reset client login ('+u+')');await persist();toast('Client login updated');render()}
+async function saveSync(){const g=i=>$('#sy_'+i).value.trim();DB.sync={owner:g('o'),repo:g('r'),branch:g('b')||'main',token:g('t')};localStorage.setItem(RKEY,JSON.stringify({owner:DB.sync.owner,repo:DB.sync.repo,branch:DB.sync.branch}));logAct('Updated cloud sync settings');await persist();if(canSync()){await pullLatest();await pushVault()}toast($('#syncst')?.textContent||'Saved')}
+/* ===================== report pages ===================== */
+const accOpts=(c,sel)=>{const gs={};c.accounts.forEach(a=>(gs[a.group]=gs[a.group]||[]).push(a));return Object.entries(gs).map(([g,l])=>`<optgroup label="${g}">${l.map(a=>`<option value="${a.id}"${a.id===sel?' selected':''}>${esc(a.name)}</option>`).join('')}</optgroup>`).join('')};
+const LED={acc:'',from:'',to:''};
+PAGES.ledger=c=>{const fy=FYS(),r=fyRange(fy);if(!amap(c)[LED.acc])LED.acc=c.accounts.find(a=>a.group==='Bank Accounts')?.id||c.accounts[0].id;
+  if(!(LED.from>=r.start&&LED.from<=r.end))LED.from=r.start;if(!(LED.to>=r.start&&LED.to<=r.end))LED.to=r.end;
+  const d=ledgerData(c,LED.acc,fy,LED.from,LED.to),a=amap(c)[LED.acc];
+  const aoa=[[a.name+' — Ledger, '+dmy(LED.from)+' to '+dmy(LED.to)],['Date','Type','No','Particulars','Narration','Debit','Credit','Balance'],[dmy(LED.from),'','','Opening balance','','','',d.open],...d.rows.map(e=>[dmy(e.date),TYPES[e.type].name,e.no,e.part,e.narr,e.dr||'',e.cr||'',e.bal]),['','','','Closing balance','',d.dr,d.cr,d.close]];CUR={title:'Ledger '+a.name,aoa};
+  return`<h1>Ledger</h1><div class="bar noprint"><select style="min-width:240px" onchange="LED.acc=this.value;render()">${accOpts(c,LED.acc)}</select><input type="date" value="${LED.from}" min="${r.start}" max="${r.end}" onchange="LED.from=this.value;render()"><input type="date" value="${LED.to}" min="${r.start}" max="${r.end}" onchange="LED.to=this.value;render()">${toolbar()}</div>
+  ${hdrLine(c,esc(a.name)+' ('+a.group+')',dmy(LED.from)+' to '+dmy(LED.to))}<div class="tw"><table><thead><tr><th>Date</th><th>Type</th><th>No</th><th>Particulars</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Balance</th></tr></thead><tbody>
+  <tr class="sub"><td colspan="6">Opening balance</td><td class="n">${drcr(d.open)}</td></tr>${d.rows.map(e=>`<tr><td>${dmy(e.date)}</td><td class="mut">${TYPES[e.type].name}</td><td>${esc(e.no)}</td><td>${esc(e.part)}${e.narr?`<div class="mut">${esc(e.narr)}</div>`:''}</td><td class="n">${z(e.dr)}</td><td class="n">${z(e.cr)}</td><td class="n">${drcr(e.bal)}</td></tr>`).join('')}
+  <tr class="tot"><td colspan="4">Closing balance</td><td class="n">${fmt(d.dr)}</td><td class="n">${fmt(d.cr)}</td><td class="n">${drcr(d.close)}</td></tr></tbody></table></div>`};
+
+const OUT={kind:'dr',detail:false};
+PAGES.outstanding=c=>{const fy=FYS(),o=outstanding(c,fy,OUT.kind),rc=OUT.kind==='dr';const aoa=[[(rc?'Receivables':'Payables')+' as on '+dmy(o.asOf)],['Party','Outstanding','0-30 days','31-60','61-90','90+','Advance / on account']];
+  let body='',T=[0,0,0,0,0,0];o.rows.forEach(r=>{aoa.push([r.acc.name,r.total,...r.bk,r.adv]);[r.total,...r.bk,r.adv].forEach((x,i)=>T[i]+=x);
+   body+=`<tr><td><b>${esc(r.acc.name)}</b></td><td class="n b">${fmt(r.total)}</td>${r.bk.map(x=>`<td class="n">${z(x)}</td>`).join('')}<td class="n">${z(r.adv)}</td><td class="n noprint"><button class="sm" onclick="openVoucher('${rc?'receipt':'payment'}',null,{accId:'${r.acc.id}',amount:${Math.max(0,r.total)}})">${rc?'Receive':'Pay'}</button></td></tr>`;
+   if(OUT.detail)r.bills.forEach(b=>{aoa.push(['   '+b.ref+' ('+dmy(b.date)+')',b.pending]);body+=`<tr><td class="mut" style="padding-left:28px">${esc(b.ref)} · ${dmy(b.date)} · ${b.age}d</td><td class="n mut">${fmt(b.pending)}</td><td colspan="6"></td></tr>`})});
+  aoa.push(['Total',...T.map(r2)]);CUR={title:rc?'Receivables':'Payables',aoa};
+  return`<h1>Outstanding</h1><div class="bar noprint"><div class="tabs" style="margin:0"><button class="${rc?'on':''}" onclick="OUT.kind='dr';render()">Receivables (Debtors)</button><button class="${!rc?'on':''}" onclick="OUT.kind='cr';render()">Payables (Creditors)</button></div><label style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" style="width:auto" ${OUT.detail?'checked':''} onchange="OUT.detail=this.checked;render()"> Bill-wise</label>${toolbar()}</div>
+  ${hdrLine(c,rc?'Receivables':'Payables','as on '+dmy(o.asOf)+' (receipts/payments adjusted oldest-bill-first)')}<div class="tw"><table><thead><tr><th>Party</th><th class="n">Outstanding</th><th class="n">0-30</th><th class="n">31-60</th><th class="n">61-90</th><th class="n">90+</th><th class="n">Advance</th><th class="noprint"></th></tr></thead><tbody>${body||'<tr><td colspan="8" class="empty">Nothing outstanding.</td></tr>'}</tbody>${o.rows.length?`<tr class="tot"><td>Total</td>${T.map(x=>`<td class="n">${fmt(x)}</td>`).join('')}<td class="noprint"></td></tr>`:''}</table></div>`};
+
+PAGES.tb=c=>{const fy=FYS(),tb=TB(c,fy),aoa=[['Trial Balance — '+c.name+' — FY '+fy],['Ledger','Group','Opening Dr','Opening Cr','Debit','Credit','Closing Dr','Closing Cr']];let T=[0,0,0,0,0,0];
+  const so=stockOpen(c,fy),pp=priorProfit(c,fy);const rows=[...(so?[{a:{name:'Opening Stock',group:'Stock-in-Hand'},open:so,dr:0,cr:0,close:so}]:[]),...(pp?[{a:{name:'Profit & Loss A/c (brought forward)',group:'Reserves'},open:-pp,dr:0,cr:0,close:-pp}]:[]),...Object.values(tb).filter(t=>t.open||t.dr||t.cr).sort((a,b)=>Object.keys(GROUPS).indexOf(a.a.group)-Object.keys(GROUPS).indexOf(b.a.group)||a.a.name.localeCompare(b.a.name))];
+  const body=rows.map(t=>{const v=[t.open>0?t.open:0,t.open<0?-t.open:0,t.dr,t.cr,t.close>0?t.close:0,t.close<0?-t.close:0];v.forEach((x,i)=>T[i]+=x);aoa.push([t.a.name,t.a.group,...v.map(x=>x||'')]);return`<tr><td>${esc(t.a.name)}</td><td class="mut">${t.a.group}</td>${v.map(x=>`<td class="n">${z(x)}</td>`).join('')}</tr>`}).join('');
+  aoa.push(['Total','',...T.map(r2)]);CUR={title:'Trial Balance',aoa};const diff=r2(T[4]-T[5]);
+  return`<h1>Trial Balance</h1><div class="bar noprint">${toolbar()}</div>${hdrLine(c,'Trial Balance','FY '+fy)}${diff?`<div class="warnbox">Trial balance differs by <b>₹${fmt(Math.abs(diff))}</b> — opening balances (ledgers / parties) are not balanced. The Balance Sheet shows this as “Difference in Opening Balances”.</div>`:''}
+  <div class="tw"><table><thead><tr><th>Ledger</th><th>Group</th><th class="n">Opening Dr</th><th class="n">Opening Cr</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Closing Dr</th><th class="n">Closing Cr</th></tr></thead><tbody>${body||'<tr><td colspan="8" class="empty">No balances yet.</td></tr>'}<tr class="tot"><td colspan="2">Total</td>${T.map(x=>`<td class="n">${fmt(x)}</td>`).join('')}</tr></tbody></table></div><p class="mut">Opening stock is shown as a debit; closing stock enters through the Trading Account (P&amp;L page / Settings).</p>`};
+
+function tHTML(title,L,R,tl,tr){const side=(a,t)=>`<div style="display:flex;flex-direction:column;height:100%"><div class="hd"><span>Particulars</span><span>Amount ₹</span></div>${a.map(r=>`<div class="row ${r.t}"><span>${esc(r.l)}</span><span>${r.a===undefined?'':fmt(r.a)}</span></div>`).join('')}<div class="row t" style="margin-top:auto"><span>Total</span><span>${fmt(t)}</span></div></div>`;
+  return`<h2>${title}</h2><div class="tfmt">${side(L,tl)}${side(R,tr)}</div>`}
+const tAoa=(L,R,tl,tr)=>{const n=Math.max(L.length,R.length),o=[];for(let i=0;i<n;i++)o.push([L[i]?.l||'',L[i]?.a??'',R[i]?.l||'',R[i]?.a??'']);o.push(['Total',tl,'Total',tr]);return o};
+function plRows(pl){const it=(a,p)=>a.map(x=>({t:'i',l:p+x.name,a:x.amt}));
+  const tl=[{t:'i',l:'To Opening Stock',a:pl.open},...it(pl.purch,'To '),...it(pl.dexp,'To '),...(pl.gp>0?[{t:'h',l:'To Gross Profit c/d',a:pl.gp}]:[])];
+  const tr=[...it(pl.sales,'By '),{t:'i',l:'By Closing Stock',a:pl.close},...(pl.gp<0?[{t:'h',l:'By Gross Loss c/d',a:-pl.gp}]:[])];
+  const pl_=[...(pl.gp<0?[{t:'i',l:'To Gross Loss b/d',a:-pl.gp}]:[]),...it(pl.iexp,'To '),...(pl.np>0?[{t:'h',l:'To Net Profit c/d',a:pl.np}]:[])];
+  const pr=[...(pl.gp>0?[{t:'i',l:'By Gross Profit b/d',a:pl.gp}]:[]),...it(pl.iinc,'By '),...(pl.np<0?[{t:'h',l:'By Net Loss c/d',a:-pl.np}]:[])];
+  return{tl,tr,pl:pl_,pr,t1:r2(Math.max(pl.dr,pl.cr)),t2:r2((pl.gp<0?-pl.gp:0)+pl.tIexp+(pl.np>0?pl.np:0))}}
+PAGES.pl=c=>{const fy=FYS(),pl=PL(c,fy),R=plRows(pl);
+  CUR={title:'Profit & Loss',aoa:[['Trading and Profit & Loss Account — '+c.name+' — FY '+fy],['Trading Account'],...tAoa(R.tl,R.tr,R.t1,R.t1),[],['Profit & Loss Account'],...tAoa(R.pl,R.pr,R.t2,R.t2)]};
+  return`<h1>Profit &amp; Loss</h1><div class="bar noprint"><label style="margin:0">Closing stock FY ${fy}</label><input type="number" step="0.01" id="stk" value="${stockClose(c,fy)||''}" style="width:150px"><button onclick="setStock()">Save</button>${toolbar()}</div>${hdrLine(c,'Trading and Profit & Loss Account','Year ended '+dmy(fyRange(fy).end))}
+  <div class="grid g4 noprint" style="margin-bottom:10px"><div class="kpi"><span>Net sales</span><b>₹${fmt(pl.tSales)}</b></div><div class="kpi"><span>Gross profit</span><b>₹${fmt(pl.gp)}</b></div><div class="kpi"><span>Net ${pl.np<0?'loss':'profit'}</span><b class="${pl.np<0?'bad':'ok'}">₹${fmt(Math.abs(pl.np))}</b></div></div>
+  ${tHTML('Trading Account',R.tl,R.tr,R.t1,R.t1)}${tHTML('Profit &amp; Loss Account',R.pl,R.pr,R.t2,R.t2)}`};
+function bsRows(secs){const o=[];secs.forEach(s=>{if(s.agg||s.items.length===1&&s.items[0].name===s.label)o.push({t:'h',l:s.label,a:s.total});else{o.push({t:'h',l:s.label});s.items.forEach(i=>o.push({t:'i',l:i.name,a:i.amt}))}});return o}
+PAGES.bs=c=>{const fy=FYS(),b=BS(c,fy),L=bsRows(b.L),A=bsRows(b.A);
+  CUR={title:'Balance Sheet',aoa:[['Balance Sheet — '+c.name+' — as at '+dmy(fyRange(fy).end)],['Liabilities','Amount','Assets','Amount'],...tAoa(L,A,b.tL,b.tA)]};
+  return`<h1>Balance Sheet</h1><div class="bar noprint">${toolbar()}</div>${hdrLine(c,'Balance Sheet','as at '+dmy(fyRange(fy).end))}${b.diff?`<div class="warnbox">Opening balances don't tally — a difference of <b>₹${fmt(Math.abs(b.diff))}</b> is shown as “Difference in Opening Balances”. Fix opening balances in <a href="#/ledgers">Ledgers</a> / <a href="#/parties">Parties</a> and Settings (opening stock).</div>`:''}
+  <div class="tfmt"><div style="display:flex;flex-direction:column"><div class="hd"><span>Liabilities</span><span>Amount ₹</span></div>${L.map(r=>`<div class="row ${r.t}"><span>${esc(r.l)}</span><span>${r.a===undefined?'':fmt(r.a)}</span></div>`).join('')}<div class="row t" style="margin-top:auto"><span>Total</span><span>${fmt(b.tL)}</span></div></div>
+  <div style="display:flex;flex-direction:column"><div class="hd"><span>Assets</span><span>Amount ₹</span></div>${A.map(r=>`<div class="row ${r.t}"><span>${esc(r.l)}</span><span>${r.a===undefined?'':fmt(r.a)}</span></div>`).join('')}<div class="row t" style="margin-top:auto"><span>Total</span><span>${fmt(b.tA)}</span></div></div></div>`};
+
+/* ===================== GST reports ===================== */
+const G={tab:'sum',per:'FY'};
+const gtbl=(head,rows,sumCols=[])=>{const T={};return`<div class="tw"><table><thead><tr>${head.map(h=>`<th${/value|taxable|igst|cgst|sgst|rate|qty|tax|itc/i.test(h)?' class="n"':''}>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map((x,i)=>{if(typeof x==='number'){if(sumCols.includes(i))T[i]=(T[i]||0)+x;return`<td class="n">${fmt(x)}</td>`}return`<td>${esc(x)}</td>`}).join('')}</tr>`).join('')||`<tr><td colspan="${head.length}" class="empty">No data for this period.</td></tr>`}${sumCols.length&&rows.length?`<tr class="tot">${head.map((h,i)=>`<td class="n">${i===0?'Total':sumCols.includes(i)?fmt(T[i]||0):''}</td>`).join('')}</tr>`:''}</tbody></table></div>`};
+function gstTabs(c,from,to){const d=gdocs(c,from,to),o={};
+  const s=gstr3b(c,from,to);
+  const sumAoa=[['GSTR-3B summary — '+dmy(from)+' to '+dmy(to)],[],['3.1 Outward supplies','Taxable value','IGST','CGST','SGST'],['(a) Outward taxable supplies',s.o.tx,s.o.igst,s.o.cgst,s.o.sgst],['(c) Nil-rated / exempt',s.o.nil,0,0,0],[],['4. ITC available (eligible)','', s.i.igst,s.i.cgst,s.i.sgst],[],['6. Net tax payable (output − ITC)','',s.net.igst,s.net.cgst,s.net.sgst]];
+  o.sum={aoa:sumAoa,html:`<h2>3.1 Outward supplies</h2>${gtbl(['Nature','Taxable value','IGST','CGST','SGST'],[['(a) Outward taxable supplies',s.o.tx,s.o.igst,s.o.cgst,s.o.sgst],['(c) Nil-rated / exempt supplies',s.o.nil,0,0,0]])}<h2>4. Eligible ITC</h2>${gtbl(['Nature','Taxable value','IGST','CGST','SGST'],[['ITC on purchases & expenses (net of debit notes)',s.i.taxable,s.i.igst,s.i.cgst,s.i.sgst]])}
+   <h2>6. Net tax payable</h2>${gtbl(['Head','Output tax','ITC','Net payable'],[['IGST',s.o.igst,s.i.igst,s.net.igst],['CGST',s.o.cgst,s.i.cgst,s.net.cgst],['SGST',s.o.sgst,s.i.sgst,s.net.sgst],['Total',r2(s.o.igst+s.o.cgst+s.o.sgst),r2(s.i.igst+s.i.cgst+s.i.sgst),s.net.total]])}<p class="mut">Negative net = excess ITC carried forward. IGST credit utilisation across heads (IGST → CGST/SGST) is not auto-applied; use the portal's offset table when filing.</p>`};
+  const out=d.filter(x=>x.dir==='out'),b2b=out.filter(x=>x.type==='sales'&&x.gstin),
+   b2bRows=b2b.map(x=>[x.gstin,x.party,x.no,dmy(x.date),x.pos+'-'+(STATES[x.pos]||''),x.T.taxable,x.T.igst,x.T.cgst,x.T.sgst,x.T.total]);
+  o.b2b={head:['GSTIN','Customer','Invoice no','Date','Place of supply','Taxable value','IGST','CGST','SGST','Invoice value'],rows:b2bRows,sum:[5,6,7,8,9]};
+  const m={};out.filter(x=>!x.gstin).forEach(x=>x.T.lines.forEach(l=>{const k=x.pos+'|'+l.gr,r=m[k]=m[k]||[x.pos+'-'+(STATES[x.pos]||''),l.gr,0,0,0,0];r[2]+=x.sign*l.taxable;r[3]+=x.sign*l.igst;r[4]+=x.sign*l.cgst;r[5]+=x.sign*l.sgst}));
+  o.b2c={head:['Place of supply','Rate %','Taxable value','IGST','CGST','SGST'],rows:Object.values(m).map(r=>r.map(x=>typeof x==='number'?r2(x):x)),sum:[2,3,4,5]};
+  o.cdn={head:['GSTIN','Party','Note no','Date','Original invoice','Taxable value','IGST','CGST','SGST','Note value'],rows:out.filter(x=>x.type==='cn').map(x=>[x.gstin||'Unregistered',x.party,x.no,dmy(x.date),x.ref,x.T.taxable,x.T.igst,x.T.cgst,x.T.sgst,x.T.total]),sum:[5,6,7,8,9]};
+  const h={};out.forEach(x=>x.T.lines.forEach(l=>{const k=(l.hsn||'-')+'|'+(l.unit||'')+'|'+l.gr,r=h[k]=h[k]||[l.hsn||'(blank)',l.unit||'',l.gr,0,0,0,0,0];r[3]+=x.sign*(+l.qty||0);r[4]+=x.sign*l.taxable;r[5]+=x.sign*l.igst;r[6]+=x.sign*l.cgst;r[7]+=x.sign*l.sgst}));
+  o.hsn={head:['HSN/SAC','UQC','Rate %','Qty','Taxable value','IGST','CGST','SGST'],rows:Object.values(h).map(r=>r.map(x=>typeof x==='number'?r2(x):x)),sum:[4,5,6,7]};
+  const sales=out.filter(x=>x.type==='sales');o.docs={head:['Document','From','To','Total issued'],rows:[['Sales invoices',sales.map(x=>x.no).sort()[0]||'',sales.map(x=>x.no).sort().pop()||'',String(sales.length)],['Credit notes','','',String(out.filter(x=>x.type==='cn').length)]]};
+  o.purch={head:['Supplier / ledger','GSTIN','Doc type','Doc no','Supplier bill no','Date','Taxable value','IGST','CGST','SGST','Total','ITC'],rows:d.filter(x=>x.dir==='in').map(x=>[x.party,x.gstin,TYPES[x.type].name,x.no,x.ref,dmy(x.date),x.sign*x.T.taxable,x.sign*x.T.igst,x.sign*x.T.cgst,x.sign*x.T.sgst,x.sign*x.T.total,x.itc?'Eligible':'Blocked']),sum:[6,7,8,9,10]};
+  o.reg={head:['Invoice no','Date','Customer','GSTIN','Taxable value','IGST','CGST','SGST','Invoice value'],rows:out.filter(x=>x.type==='sales').map(x=>[x.no,dmy(x.date),x.party,x.gstin,x.T.taxable,x.T.igst,x.T.cgst,x.T.sgst,x.T.total]),sum:[4,5,6,7,8]};
+  return o}
+const GTAB=[['sum','GSTR-3B summary'],['b2b','GSTR-1 · B2B'],['b2c','GSTR-1 · B2C'],['cdn','GSTR-1 · Credit notes'],['hsn','HSN summary'],['docs','Documents issued'],['reg','Sales register'],['purch','Purchase / ITC register']];
+PAGES.gst=c=>{if(!c.gstReg)return`<h1>GST Reports</h1><div class="card">This company is marked <b>not GST registered</b>, so bills carry no GST. Enable it in <a href="#/settings">Settings</a> (set “GST registered?” = Yes and add the GSTIN).</div>`;
+  const fy=FYS(),ms=monthsOf(fy);if(G.per!=='FY'&&!ms.some(m=>m.key===G.per))G.per='FY';const r=G.per==='FY'?fyRange(fy):monthRange(G.per),t=gstTabs(c,r.start,r.end),cur=t[G.tab],name=GTAB.find(x=>x[0]===G.tab)[1];
+  CUR={title:name,aoa:G.tab==='sum'?t.sum.aoa:[cur.head,...cur.rows]};
+  return`<h1>GST Reports</h1><div class="bar noprint"><select onchange="G.per=this.value;render()"><option value="FY"${G.per==='FY'?' selected':''}>Full FY ${fy}</option>${ms.map(m=>`<option value="${m.key}"${G.per===m.key?' selected':''}>${m.label}</option>`).join('')}</select>${toolbar(`<button onclick="exportGstAll()">Export all tabs</button>`)}</div>
+  <div class="tabs noprint">${GTAB.map(([k,n])=>`<button class="${G.tab===k?'on':''}" onclick="G.tab='${k}';render()">${n}</button>`).join('')}</div>${hdrLine(c,name,dmy(r.start)+' to '+dmy(r.end))}${G.tab==='sum'?t.sum.html:gtbl(cur.head,cur.rows,cur.sum||[])}`};
+function exportGstAll(){const c=C(),fy=FYS(),r=G.per==='FY'?fyRange(fy):monthRange(G.per),t=gstTabs(c,r.start,r.end);exportSheets('GST '+c.name+' '+(G.per==='FY'?fy:G.per),GTAB.map(([k,n])=>({name:n.replace('·','-'),aoa:k==='sum'?t.sum.aoa:[t[k].head,...t[k].rows]})))}
+
+/* ===================== dashboard ===================== */
+PAGES.dash=c=>{const fy=FYS(),pl=PL(c,fy),tb=TB(c,fy),sum=g=>r2(c.accounts.filter(a=>a.group===g).reduce((s,a)=>s+tb[a.id].close,0));
+  const rec=outstanding(c,fy,'dr').rows.reduce((s,r)=>s+r.total,0),pay=outstanding(c,fy,'cr').rows.reduce((s,r)=>s+r.total,0),cash=r2(sum('Cash-in-Hand')+sum('Bank Accounts'));
+  const ms=monthsOf(fy),mS={},mP={};c.vouchers.forEach(v=>{const k=v.date.slice(0,7);if(v.type==='sales')mS[k]=(mS[k]||0)+calc(c,v).taxable;else if(v.type==='purchase')mP[k]=(mP[k]||0)+calc(c,v).taxable});
+  const mx=Math.max(1,...ms.map(m=>Math.max(mS[m.key]||0,mP[m.key]||0)));
+  let gst='';if(c.gstReg){const cm=today().slice(0,7),k=ms.some(m=>m.key===cm)?cm:ms[11].key,r=monthRange(k),s=gstr3b(c,r.start,r.end);gst=`<div class="kpi"><span>GST payable — ${ms.find(m=>m.key===k).label}</span><b class="${s.net.total>0?'warn':'ok'}">₹${fmt(s.net.total)}</b></div>`}
+  const old=!DB.lastExport||(Date.now()-DB.lastExport)>7*864e5;
+  const recent=[...c.vouchers].sort((a,b)=>a.date<b.date?1:-1).slice(0,8);
+  return`<h1>Dashboard <span class="mut" style="font-size:13px;font-weight:400">${esc(c.name)} · FY ${fy}</span></h1>${old&&c.vouchers.length?`<div class="warnbox">Your data lives in this browser only. <a onclick="go('data')" style="cursor:pointer;color:var(--pri)">Export a backup</a> ${DB.lastExport?'(last: '+new Date(DB.lastExport).toLocaleDateString()+')':''}.</div>`:''}
+  <div class="bar"><button class="pri" onclick="openVoucher('sales')">+ Sales Invoice</button><button onclick="openVoucher('purchase')">+ Purchase</button><button onclick="openVoucher('receipt')">+ Receipt</button><button onclick="openVoucher('payment')">+ Payment</button><button onclick="openVoucher('expense')">+ Expense</button></div>
+  <div class="grid g4"><div class="kpi"><span>Net sales</span><b>₹${fmt(pl.tSales)}</b></div><div class="kpi"><span>Net purchases</span><b>₹${fmt(pl.tPurch)}</b></div><div class="kpi"><span>Net ${pl.np<0?'loss':'profit'} (this FY)</span><b class="${pl.np<0?'bad':'ok'}">₹${fmt(Math.abs(pl.np))}</b></div>
+  <div class="kpi"><span>Receivables</span><b>₹${fmt(rec)}</b></div><div class="kpi"><span>Payables</span><b>₹${fmt(pay)}</b></div><div class="kpi"><span>Cash + Bank</span><b>₹${fmt(cash)}</b></div>${gst}</div>
+  <div class="grid g2" style="margin-top:14px"><div class="card"><b>Monthly sales vs purchases</b> <span class="mut">(taxable)</span><div class="bars">${ms.map(m=>`<div><div class="pair"><i style="height:${(mS[m.key]||0)/mx*100}%;background:var(--pri)" title="Sales ${fmt(mS[m.key]||0)}"></i><i style="height:${(mP[m.key]||0)/mx*100}%;background:#e0a526" title="Purchases ${fmt(mP[m.key]||0)}"></i></div>${m.label.slice(0,3)}</div>`).join('')}</div><span class="tag">■ Sales</span> <span class="tag y">■ Purchases</span></div>
+  <div class="card"><b>Recent entries</b><table style="margin-top:6px"><tbody>${recent.map(v=>`<tr><td>${dmy(v.date)}</td><td><span class="tag">${TYPES[v.type].name}</span></td><td>${esc(vParty(c,v))}</td><td class="n">${fmt(vTotal(c,v))}</td></tr>`).join('')||'<tr><td class="empty">No entries yet. Add parties, then create your first invoice.</td></tr>'}</tbody></table></div></div>`};
+/* ===================== export / import ===================== */
+function plbsObject(c,fy){const pl=PL(c,fy),bs=BS(c,fy),tb=TB(c,fy),r=fyRange(fy);
+  const nm=a=>a.map(x=>({ledger:x.name,amount:x.amt}));
+  const sec=(side,key)=>{const arr=bs[side].filter(s=>s.key===key);return{total:r2(arr.reduce((s,x)=>s+x.total,0)),items:arr.flatMap(s=>s.items.map(i=>({ledger:i.name,amount:i.amt})))}};
+  const cap=sec('L','Capital Account'),pp=priorProfit(c,fy);
+  const figures={sales:pl.tSales,purchases:pl.tPurch,directExpenses:pl.tDexp,indirectExpenses:pl.tIexp,indirectIncome:pl.tIinc,openingStock:pl.open,closingStock:pl.close,grossProfit:pl.gp,netProfit:pl.np,
+    capital:cap.total,profitBroughtForward:pp,loans:sec('L','Loans (Liability)').total,currentLiabilities:sec('L','Current Liabilities').total,sundryCreditors:sec('L','Sundry Creditors').total,gstAndDutiesPayable:sec('L','Duties & Taxes').total,
+    fixedAssets:sec('A','Fixed Assets').total,investments:sec('A','Investments').total,sundryDebtors:sec('A','Sundry Debtors').total,cashAndBank:sec('A','Cash & Bank').total,otherCurrentAssets:sec('A','Current Assets').total,gstInputCredit:sec('A','Duties & Taxes').total,
+    openingBalanceDifference:bs.diff,totalLiabilities:bs.tL,totalAssets:bs.tA};
+  return{format:'KRN-PLBS-IMPORT',version:1,source:'KRN Audit Consultancy – Accounting ERP',exportedAt:new Date().toISOString(),
+   client:{name:c.name,entityType:c.type,pan:c.pan,gstin:c.gstin,address:c.address,state:STATES[c.state]||'',gstRegistered:c.gstReg},
+   financialYear:fy,periodStart:r.start,periodEnd:r.end,figures,
+   tradingAccount:{openingStock:pl.open,purchases:nm(pl.purch),directExpenses:nm(pl.dexp),sales:nm(pl.sales),closingStock:pl.close,grossProfit:pl.gp},
+   profitAndLoss:{indirectIncomes:nm(pl.iinc),indirectExpenses:nm(pl.iexp),netProfit:pl.np},
+   balanceSheet:{liabilities:bs.L.map(s=>({group:s.label,total:s.total,items:s.items.map(i=>({ledger:i.name,amount:i.amt}))})),assets:bs.A.map(s=>({group:s.label,total:s.total,items:s.items.map(i=>({ledger:i.name,amount:i.amt}))})),totalLiabilities:bs.tL,totalAssets:bs.tA},
+   trialBalance:Object.values(tb).filter(t=>t.open||t.dr||t.cr).map(t=>({ledger:t.a.name,group:t.a.group,opening:t.open,debit:t.dr,credit:t.cr,closing:t.close,closingType:t.close>=0?'Dr':'Cr'}))}}
+const safe=s=>String(s).replace(/[^\w\-]+/g,'_');
+function exportPLBS(){const c=C(),o=plbsObject(c,FYS());download(`PLBS_${safe(c.name)}_${FYS()}.json`,JSON.stringify(o,null,2));DB.lastExport=Date.now();save();toast('PL-BS file exported')}
+function exportBackup(all){const o={format:'KRN-BILLING-BACKUP',version:1,exportedAt:new Date().toISOString(),companies:all?DB.companies:{[C().id]:C()}};download(`KRN_Billing_backup_${all?'all':safe(C().name)}_${today()}.json`,JSON.stringify(o));DB.lastExport=Date.now();save();toast('Backup exported');render()}
+function exportWorkbook(){const c=C(),sv={...FLT},ok=OUT.kind;FLT.q='';FLT.m='';const sh=[];
+  [['tb','Trial Balance'],['pl','Trading & P&L'],['bs','Balance Sheet'],['sales','Sales'],['purchase','Purchases'],['receipt','Receipts'],['payment','Payments'],['expense','Expenses'],['cn','Credit Notes'],['dn','Debit Notes'],['parties','Parties']].forEach(([k,n])=>{PAGES[k](c);sh.push({name:n,aoa:CUR.aoa})});
+  ['dr','cr'].forEach(k=>{OUT.kind=k;PAGES.outstanding(c);sh.push({name:k==='dr'?'Receivables':'Payables',aoa:CUR.aoa})});
+  if(c.gstReg){const t=gstTabs(c,fyRange(FYS()).start,fyRange(FYS()).end);GTAB.forEach(([k,n])=>sh.push({name:'GST '+n.replace('·','-'),aoa:k==='sum'?t.sum.aoa:[t[k].head,...t[k].rows]}))}
+  Object.assign(FLT,sv);OUT.kind=ok;exportSheets(`Reports_${safe(c.name)}_${FYS()}`,sh);DB.lastExport=Date.now();save()}
+function importBackup(text){let o;try{o=JSON.parse(text)}catch(e){toast('Not a valid JSON file');return}
+  if(o.format!=='KRN-BILLING-BACKUP'||!o.companies){toast(o.format==='KRN-PLBS-IMPORT'?'This is a PL-BS export file — import it in the PL-BS module':'Unrecognised backup file');return}
+  let add=0,rep=0;for(const[id,c]of Object.entries(o.companies)){if(!c.accounts||!c.vouchers)continue;if(DB.companies[id]){if(!confirm(`"${DB.companies[id].name}" already exists. Replace it with the backup copy?`))continue;rep++}else add++;DB.companies[id]=c}
+  logAct('Restored backup');if(!DB.active||!DB.companies[DB.active])DB.active=Object.keys(DB.companies)[0];const c=C();if(c&&(!DB.fy||DB.fy<c.firstFY))DB.fy=fyOf(today())<c.firstFY?c.firstFY:fyOf(today());save();render();toast(`Imported: ${add} new, ${rep} replaced`)}
+function pickImport(kind){const i=document.createElement('input');i.type='file';i.accept=kind==='backup'?'.json,application/json':'.xlsx,.xls,.csv';i.onchange=()=>{const f=i.files[0];if(!f)return;const rd=new FileReader();
+  if(kind==='backup'){rd.onload=()=>importBackup(rd.result);rd.readAsText(f)}
+  else{if(!window.XLSX){toast('Excel library not loaded (check internet)');return}rd.onload=()=>{try{const wb=XLSX.read(rd.result,{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});kind==='parties'?impParties(rows):impItems(rows)}catch(e){toast('Could not read file: '+e.message)}};rd.readAsArrayBuffer(f)}};i.click()}
+const normRow=r=>{const o={};for(const k in r)o[k.toLowerCase().replace(/[^a-z0-9]/g,'')]=typeof r[k]==='string'?r[k].trim():r[k];return o};
+function impParties(rows){const c=C();let n=0,sk=0;rows.map(normRow).forEach(r=>{const name=String(r.name||r.partyname||'').trim();if(!name)return;if(c.parties.some(p=>p.name.toLowerCase()===name.toLowerCase())){sk++;return}
+  const gstin=String(r.gstin||'').toUpperCase(),type=/sup|cred|vend/i.test(r.type||'')?'supplier':'customer';let st=c.state;const sc=String(r.state||'');
+  if(STATES[gstin.slice(0,2)])st=gstin.slice(0,2);else if(STATES[sc.padStart(2,'0')])st=sc.padStart(2,'0');else{const f=Object.entries(STATES).find(([k,v])=>v.toLowerCase()===sc.toLowerCase());if(f)st=f[0]}
+  const id='p'+uid();c.parties.push({id,type,name,gstin,pan:String(r.pan||gstin.slice(2,12)||'').toUpperCase(),state:st,phone:String(r.phone||r.mobile||''),email:String(r.email||''),address:String(r.address||'')});
+  const ot=/cr/i.test(r.openingtype||r.drcr||'')?'Cr':/dr/i.test(r.openingtype||r.drcr||'')?'Dr':(type==='supplier'?'Cr':'Dr');
+  c.accounts.push({id,name,group:type==='supplier'?'Sundry Creditors':'Sundry Debtors',opening:Math.abs(+r.opening||+r.openingbalance||0),ot,party:1});n++});
+  save();render();toast(`Imported ${n} parties${sk?`, skipped ${sk} existing`:''}`)}
+function impItems(rows){const c=C();let n=0;rows.map(normRow).forEach(r=>{const name=String(r.name||r.item||'').trim();if(!name||c.items.some(i=>i.name.toLowerCase()===name.toLowerCase()))return;
+  c.items.push({id:'i'+uid(),name,type:/good/i.test(r.type||'')?'Goods':'Service',hsn:String(r.hsn||r.sac||r.hsnsac||''),unit:String(r.unit||''),rate:+r.rate||0,gst:r.gst===''||r.gst===undefined?18:+r.gst});n++});save();render();toast(`Imported ${n} items`)}
+const partyTemplate=()=>exportSheets('Parties_template',[{name:'Parties',aoa:[['Name','Type','GSTIN','PAN','State','Phone','Email','Address','Opening','Dr/Cr'],['Sample Customer','Customer','33ABCDE1234F1Z5','ABCDE1234F','Tamil Nadu','9999999999','a@b.com','Chennai',10000,'Dr']]}]);
+const itemTemplate=()=>exportSheets('Items_template',[{name:'Items',aoa:[['Name','Type','HSN/SAC','Unit','Rate','GST %'],['Tax consultancy fee','Service','998231','Nos',5000,18]]}]);
+
+PAGES.data=c=>{const fy=FYS(),o=plbsObject(c,fy),f=o.figures,row=(a,b)=>`<tr><td>${a}</td><td class="n">${fmt(b)}</td></tr>`;
+  return`<h1>Export / Import</h1>
+  <div class="warnbox"><b>Where is my data?</b> Everything is saved in <i>this browser on this device</i> (localStorage). Clearing site data or switching browsers loses it — export a backup regularly.</div>
+  <div class="grid g2"><div class="card"><h2 style="margin-top:0">Export for KRN PL-BS module</h2><p class="mut">One JSON file for <b>${esc(c.name)}</b>, FY ${fy}: trading account, P&amp;L, balance sheet (with ledger-wise details), closing balances and trial balance.</p>
+   <button class="pri" onclick="exportPLBS()">Download PL-BS file (.json)</button><table style="margin-top:12px"><tbody>${row('Net sales',f.sales)}${row('Net purchases',f.purchases)}${row('Closing stock',f.closingStock)}${row('Net profit / (loss)',f.netProfit)}${row('Capital',f.capital)}${row('Sundry debtors',f.sundryDebtors)}${row('Sundry creditors',f.sundryCreditors)}${row('Cash &amp; bank',f.cashAndBank)}${row('Total assets',f.totalAssets)}</tbody></table></div>
+  <div class="card"><h2 style="margin-top:0">Export reports (Excel)</h2><p class="mut">Workbook with Trial Balance, P&amp;L, Balance Sheet, registers, outstanding, parties and GST tabs for FY ${fy}.</p><button class="pri" onclick="exportWorkbook()">Download Excel workbook</button>
+   <h2>Backup (JSON)</h2><p class="mut">Full data, restorable on any device.</p><div class="bar"><button onclick="exportBackup(false)">This company</button><button onclick="exportBackup(true)">All companies</button></div><p class="mut">Last export: ${DB.lastExport?new Date(DB.lastExport).toLocaleString():'never'}</p></div></div>
+  <div class="card"><h2 style="margin-top:0">Import</h2><div class="bar"><button class="pri" onclick="pickImport('backup')">Restore backup (.json)</button><button onclick="pickImport('parties')">Import parties (Excel/CSV)</button><button onclick="partyTemplate()">Parties template</button><button onclick="pickImport('items')">Import items (Excel/CSV)</button><button onclick="itemTemplate()">Items template</button></div>
+  <p class="mut">Restoring a backup adds companies that don't exist yet and asks before replacing ones that do.</p></div>`};
+
+/* ===================== init ===================== */
+boot();
+</script></body></html>
