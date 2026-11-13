@@ -545,7 +545,7 @@ function paperHtml(kind, d) {
   <div class="pf">Powered by ${FOOTER_BRAND}</div></div>`;
 }
 function printHtml(html) { $("print").innerHTML = html; window.print(); }
-let PDFC = {};
+let PDFC = {}, PNGC = {};
 function docHtml(kind, d) { return kind === "sales" || kind === "purchases" ? paperHtml(kind, d) : voucherHtml(kind, d); }
 function docModal(kind, id) {
   const d = db[kind].find(x => x.id === id); if (!d) return;
@@ -555,8 +555,8 @@ function docModal(kind, id) {
   const edit = isDoc ? `docForm('${kind}','${id}')` : `vouchForm('${kind}','${id}')`;
   openModal(title, docHtml(kind, d) + msg, null, null,
     `<button class="btn" onclick="${edit}">Edit</button><button class="btn" onclick="pdfDownload('${kind}','${id}')">Download PDF</button><button class="btn" onclick="printDoc('${kind}','${id}')">Print</button>` +
-    (canWa ? `<button class="btn" onclick="waChat('${kind}','${id}')">Open customer's chat</button><button class="btn pri" id="wa_btn" onclick="waShare('${kind}','${id}')">Send PDF on WhatsApp</button>` : ""));
-  PDFC = {}; if (canWa) getPdf(kind, id).catch(() => {});
+    (canWa ? `<button class="btn" onclick="waChat('${kind}','${id}')">Open customer's chat</button><button class="btn pri" id="wa_btn" onclick="waShare('${kind}','${id}')">Send on WhatsApp</button>` : ""));
+  PDFC = {}; PNGC = {}; if (canWa) { getPdf(kind, id).catch(() => {}); getPng(kind, id).catch(() => {}); }
 }
 const viewDoc = docModal, viewVoucher = docModal;
 function printDoc(kind, id) { printHtml(docHtml(kind, db[kind].find(x => x.id === id))); }
@@ -616,10 +616,30 @@ function getPdf(kind, id) {
   if (!PDFC[key]) PDFC[key] = (async () => { const d = db[kind].find(x => x.id === id); return new File([await makePdf(docHtml(kind, d))], String(d.no).replace(/[^A-Za-z0-9_-]+/g, "-") + ".pdf", {type: "application/pdf"}); })();
   return PDFC[key];
 }
+async function makePng(html) {
+  await pdfLibs();
+  const host = document.createElement("div");
+  host.className = "pdfhost"; host.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;background:#fff";
+  host.innerHTML = html; document.body.appendChild(host);
+  try {
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const canvas = await html2canvas(host, {scale: 2, backgroundColor: "#ffffff", useCORS: true});
+    return await new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error("image failed")), "image/png"));
+  } finally { host.remove(); }
+}
+function getPng(kind, id) {
+  const key = kind + id;
+  if (!PNGC[key]) PNGC[key] = makePng(docHtml(kind, db[kind].find(x => x.id === id)));
+  return PNGC[key];
+}
+function copyImg(kind, id) {
+  if (!(navigator.clipboard && window.ClipboardItem)) return Promise.resolve(false);
+  return navigator.clipboard.write([new ClipboardItem({"image/png": getPng(kind, id)})]).then(() => true, () => false);
+}
 function saveBlob(blob, name) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
 }
-const waBusy = (on, label) => { const b = $("wa_btn"); if (b) { b.disabled = on; b.textContent = on ? label : "Send PDF on WhatsApp"; } };
+const waBusy = (on, label) => { const b = $("wa_btn"); if (b) { b.disabled = on; b.textContent = on ? label : "Send on WhatsApp"; } };
 async function pdfDownload(kind, id) {
   try { const f = await getPdf(kind, id); saveBlob(f, f.name); toast("PDF downloaded"); } catch (e) { toast("Could not create the PDF: " + e.message); }
 }
@@ -636,10 +656,13 @@ function openWaChat(phone, text) {
 }
 async function waShare(kind, id, forceChat) {
   const d = db[kind].find(x => x.id === id), p = P(d.partyId) || {}, msg = ($("wa_msg") || {}).value || waMsg(kind, d);
-  waBusy(true, "Preparing PDF…");
+  const mobile = !forceChat && isMobile();
+  const copied = mobile ? Promise.resolve(false) : copyImg(kind, id);
+  waBusy(true, "Preparing…");
   let f; try { f = await getPdf(kind, id); } catch (e) { waBusy(false); return toast("Could not create the PDF: " + e.message); }
+  const imgOk = await copied;
   waBusy(false);
-  if (!forceChat && isMobile() && navigator.canShare && navigator.canShare({files: [f]})) {
+  if (mobile && navigator.canShare && navigator.canShare({files: [f]})) {
     try { await navigator.share({files: [f], text: msg, title: f.name}); return; }
     catch (e) { if (e && e.name === "AbortError") return; }
   }
@@ -647,11 +670,11 @@ async function waShare(kind, id, forceChat) {
   openWaChat(p.phone, msg);
   const box = $("wa_steps"); if (!box) return toast("PDF downloaded — attach it in the WhatsApp chat");
   const url = URL.createObjectURL(f);
-  box.innerHTML = `<div class="panel" style="margin-top:14px;padding:16px"><h3 style="margin-bottom:10px">Almost done — 2 quick steps in WhatsApp</h3>
-  <p class="note">✔ PDF saved to your Downloads: <b>${esc(f.name)}</b><br>✔ WhatsApp opened for <b>${esc(p.name || "")}</b>${p.phone ? " (" + esc(p.phone) + ")" : " — no number saved, pick the contact"} with the message filled in.</p>
-  <p style="margin:12px 0 8px"><b>1.</b> Click the 📎 in the chat → <b>Document</b> → choose <b>${esc(f.name)}</b> (or drag the chip below into the chat).<br><b>2.</b> Press <b>Send</b>.</p>
-  <div draggable="true" id="wa_chip" style="display:inline-flex;gap:8px;align-items:center;padding:9px 14px;border:1px dashed var(--line);border-radius:12px;cursor:grab">📄 ${esc(f.name)}</div>
-  <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="openWaChat('${esc(p.phone || "")}', $('wa_msg').value)">Re-open chat</button><button class="btn" onclick="navigator.clipboard.writeText($('wa_msg').value).then(()=>toast('Message copied'))">Copy message</button></div></div>`;
+  box.innerHTML = `<div class="panel" style="margin-top:14px;padding:16px"><h3 style="margin-bottom:10px">WhatsApp is open — 2 quick steps</h3>
+  <p class="note">${imgOk ? "✔ Invoice image copied to clipboard" : "✖ Could not copy the image (browser blocked it) — use the PDF below"}<br>✔ PDF also saved to Downloads: <b>${esc(f.name)}</b><br>✔ Chat opened for <b>${esc(p.name || "")}</b>${p.phone ? " (" + esc(p.phone) + ")" : " — no number saved, pick the contact"} with the message filled in.</p>
+  <p style="margin:12px 0 8px"><b>1.</b> In the chat press <b>Enter</b> to send the message.<br><b>2.</b> ${imgOk ? "Click the message box, press <b>Ctrl+V</b> to paste the invoice, then <b>Enter</b>." : "Click the 📎 → Document → choose the PDF (or drag the chip below)."}</p>
+  <div draggable="true" id="wa_chip" style="display:inline-flex;gap:8px;align-items:center;padding:9px 14px;border:1px dashed var(--line);border-radius:12px;cursor:grab">📄 ${esc(f.name)} <small style="color:var(--mut)">drag into chat to send as PDF</small></div>
+  <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="copyImg('${kind}','${id}').then(ok => toast(ok ? 'Invoice image copied — press Ctrl+V in the chat' : 'Copy blocked by the browser'))">Copy invoice image again</button><button class="btn" onclick="openWaChat('${esc(p.phone || "")}', $('wa_msg').value)">Re-open chat</button><button class="btn" onclick="navigator.clipboard.writeText($('wa_msg').value).then(()=>toast('Message copied'))">Copy message</button></div></div>`;
   $("wa_chip").addEventListener("dragstart", e => e.dataTransfer.setData("DownloadURL", "application/pdf:" + f.name + ":" + url));
   box.scrollIntoView({behavior: "smooth", block: "nearest"});
 }
