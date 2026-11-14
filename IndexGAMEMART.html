@@ -31,6 +31,11 @@ body:before{content:"";position:fixed;inset:0;z-index:-1;background:radial-gradi
 .foot{margin-top:6px;display:flex;align-items:center;gap:12px;padding:12px;border-radius:22px;border:1px solid var(--line);background:rgba(255,255,255,.07)}
 .foot .av{width:36px;height:36px;border-radius:50%;background:#f2f2f4;color:#0b0b0c;display:grid;place-items:center;font-weight:800;flex:none}
 .foot b{display:block;font-size:14px;line-height:1.2}
+.foot .sd{width:10px;height:10px;border-radius:50%;flex:none;margin:0 6px 0 4px;background:#7ee2a0;box-shadow:0 0 0 4px rgba(126,226,160,.16)}
+.foot .sd.busy{background:#ffd27a;box-shadow:0 0 0 4px rgba(255,210,122,.16);animation:sdp 1s infinite}
+.foot .sd.bad{background:#ff8a8a;box-shadow:0 0 0 4px rgba(255,138,138,.16)}
+@keyframes sdp{50%{opacity:.35}}
+.bd{margin-left:auto;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(255,210,122,.16);color:#ffd27a}
 .foot small{color:var(--mut);font-size:12px;line-height:1.3;display:block}
 /* main */
 main{min-width:0;padding:6px 6px 40px}
@@ -165,7 +170,7 @@ body[data-lv="0"] .act a.ed,body[data-lv="1"] .act a.ed,body[data-lv="0"] .act a
   <aside class="side" id="side">
     <div class="brand"><div class="logo" id="logo">GM</div><div><b id="brandName">Client</b><small>Billing &amp; Accounts</small></div></div>
     <nav class="nav" id="nav"></nav>
-    <div class="foot"><div class="av">K</div><div><b>Powered by KRN Tax</b><small id="saved">Consultancy</small></div></div>
+    <div class="foot"><span class="sd ok" id="syncdot"></span><div><b id="saved">Ready</b><small>Powered by KRN Tax</small></div></div>
   </aside>
   <main id="main"></main>
 </div>
@@ -202,12 +207,15 @@ const ICON = {
  db:'<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
  set:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
  lock:'<rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 018 0v3"/>',
+ clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+ book:'<path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2V5z"/><path d="M4 19a2 2 0 012-2h13"/><path d="M9 8h6M9 12h4"/>',
+ bank:'<path d="M3 10l9-6 9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8"/><path d="M3 21h18"/>',
  search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>'
 };
 const svg = k => `<svg viewBox="0 0 24 24">${ICON[k]}</svg>`;
 const NAV = [
  ["WORKSPACE",[["dashboard","Dashboard","dash"],["sales","Sales","sales"],["purchases","Purchases","purch"],["receipts","Receipts","rec"],["payments","Payments","pay"],["entries","Expenses & Others","exp"],["parties","Parties","users"],["items","Items","box"]]],
- ["REPORTS",[["outstanding","Outstanding & Ageing","rec"],["cashbook","Cash Book","pay"],["gst","GST Reports","gst"],["pnl","Profit & Loss","pl"],["bs","Balance Sheet","bs"]]],
+ ["REPORTS",[["outstanding","Outstanding & Ageing","clock"],["cashbook","Cash Book","book"],["gst","GST Reports","gst"],["pnl","Profit & Loss","pl"],["bs","Balance Sheet","bs"]]],
  ["DATA",[["backup","Import / Backup","db"],["settings","Settings","set"],["__lock","Lock","lock"]]]
 ];
 
@@ -266,7 +274,7 @@ function save() {
   const s = JSON.stringify(db);
   try { localStorage.setItem(KEY, s); } catch (e) { mem = s; }
   lastSaved = new Date();
-  if (GH.on()) queueSync(); else $("saved").textContent = "Saved locally ✓ " + lastSaved.toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"});
+  if (GH.on()) queueSync(); else ghStatus("Saved ✓ " + lastSaved.toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"}));
 }
 const S = () => db.settings;
 const P = id => db.parties.find(p => p.id === id);
@@ -397,7 +405,7 @@ function setPage(p) {
 }
 function navHtml() {
   return NAV.map(([g, items]) => { const it = items.filter(([k]) => pageOk(k)); return it.length ? `<div class="grp">${g}</div>` + it.map(([k, l, i]) =>
-    `<div class="ni ${k === page ? "on" : ""}" onclick="setPage('${k}')"><span class="ic">${svg(i)}</span>${l}</div>`).join("") : ""; }).join("") +
+    `<div class="ni ${k === page ? "on" : ""}" onclick="setPage('${k}')"><span class="ic">${svg(i)}</span>${l}${navBadge(k)}</div>`).join("") : ""; }).join("") +
     (multi() && CU ? `<div class="note" style="padding:12px 14px">Signed in: <b>${esc(CU.name)}</b>${CU.owner ? " (owner)" : ""}</div>` : "");
 }
 const btn = (l, f, pri) => `<button class="btn ${pri ? "pri" : ""}" onclick="${f}">${l}</button>`;
@@ -1146,7 +1154,7 @@ const GH = {k: KEY + "_gh", cfg: null, sha: null, busy: false, dirty: false, pen
 const b64 = s => btoa(unescape(encodeURIComponent(s)));
 const unb64 = s => decodeURIComponent(escape(atob(s.replace(/\s/g, ""))));
 const clock = () => new Date().toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"});
-function ghStatus(m, bad) { $("saved").textContent = m; $("saved").style.color = bad ? "var(--bad)" : ""; }
+function ghStatus(m, bad) { $("saved").textContent = m; $("saved").style.color = bad ? "var(--bad)" : ""; const d = $("syncdot"); if (d) d.className = "sd " + (bad ? "bad" : /…$/.test(m) ? "busy" : "ok"); }
 async function ghGet() {
   const u = GH.url() + "?ref=" + encodeURIComponent(GH.cfg.branch || "main") + "&t=" + Date.now();
   const r = await fetch(u, {headers: GH.h(), cache: "no-store"});
@@ -1161,7 +1169,7 @@ async function ghGet() {
 function applyRemote(g) {
   db = Object.assign(defaults(), g.data); GH.sha = g.sha; GH.pending = false; GH.store();
   try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { mem = JSON.stringify(db); }
-  db.users = db.users || []; bankInit(); render(); if (db.users.length) ensureLogin(); ghStatus("Synced to GitHub ✓ " + clock());
+  db.users = db.users || []; bankInit(); render(); if (db.users.length) ensureLogin(); ghStatus("Synced ✓ " + clock());
 }
 function queueSync() {
   if (!GH.on()) return;
@@ -1171,7 +1179,7 @@ function queueSync() {
 async function ghPush() {
   if (!GH.on()) return false;
   if (GH.busy) { GH.dirty = true; return false; }
-  GH.busy = true; GH.dirty = false; ghStatus("Syncing to GitHub…");
+  GH.busy = true; GH.dirty = false; ghStatus("Syncing…");
   let ok = false;
   try {
     const body = {message: "Update " + CLIENT_NAME + " data " + new Date().toISOString(), content: b64(JSON.stringify(db)), branch: GH.cfg.branch || "main"};
@@ -1185,7 +1193,7 @@ async function ghPush() {
     } else {
       if (!r.ok) throw new Error("GitHub " + r.status + (r.status === 401 ? " (check token)" : r.status === 403 || r.status === 404 ? " (token needs Contents: read & write on the data repo)" : ""));
       const j = await r.json(); GH.sha = j.content.sha; GH.pending = false; GH.store(); ok = true;
-      ghStatus("Synced to GitHub ✓ " + clock());
+      ghStatus("Synced ✓ " + clock());
     }
   } catch (e) { ghStatus("Sync failed: " + e.message, true); }
   GH.busy = false;
@@ -1198,7 +1206,7 @@ async function ghPull(manual) {
     const g = await ghGet();
     if (g.missing) { await ghPush(); return; }
     if (g.sha !== GH.sha) { applyRemote(g); if (manual) toast("Loaded latest from GitHub"); }
-    else { ghStatus("Synced to GitHub ✓ " + clock()); if (manual) toast("Already up to date"); }
+    else { ghStatus("Synced ✓ " + clock()); if (manual) toast("Already up to date"); }
   } catch (e) { ghStatus("Sync failed: " + e.message, true); }
 }
 async function ghConnect() {
@@ -1521,7 +1529,7 @@ function dashExtra() {
 
 PM.bankrec = "bankrec"; PRESETS.staff.bankrec = 0; PRESETS.accountant.bankrec = 3; PRESETS.view.bankrec = 1;
 MODS.splice(MODS.findIndex(m => m[0] === "backup"), 0, ["bankrec", "Bank Reconciliation"]);
-NAV[1][1].splice(2, 0, ["bankrec", "Bank Reconciliation", "rec"]);
+NAV[1][1].splice(2, 0, ["bankrec", "Bank Recon", "bank"]);
 Object.assign(KIND_LBL, {interest: "Interest Received", loanin: "Loan Received", loanout: "Loan Repaid"});
 /* ============================================================
    v10: bank statement import + reconciliation
@@ -1952,6 +1960,7 @@ function bankCsv() {
   download(CLIENT_NAME + "_bank_lines_" + today() + ".csv", "\ufeff" + rows.map(r => r.map(csvq).join(",")).join("\r\n"), "text/csv");
 }
 
+function navBadge(k) { let n = 0; try { if (k === "bankrec") n = BK().lines.filter(l => bkSt(l) !== "cleared").length; else if (k === "items") n = lowItems().length; } catch (e) {} return n ? `<span class="bd">${n}</span>` : ""; }
 /* ---------------- boot ---------------- */
 document.addEventListener("keydown", e => { if (e.key === "Escape" && $("layer").innerHTML) closeModal(); });
 $("saved").textContent = "Consultancy";
