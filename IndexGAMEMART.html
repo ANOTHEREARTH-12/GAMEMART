@@ -185,9 +185,36 @@ body[data-lv="0"] .act a.ed,body[data-lv="1"] .act a.ed,body[data-lv="0"] .act a
  .nm{right:auto;left:0}
 }
 @media(max-width:560px){.stats{grid-template-columns:1fr 1fr;gap:10px}.stat b{font-size:21px}}
+/* app theme: Blood Moon (default) — Settings > App theme can switch to Classic */
+body.bt{--line:rgba(255,120,130,.22);--glass:linear-gradient(180deg,rgba(255,70,85,.14),rgba(255,70,85,.04));--bad:#ff6b78;--mut:rgba(255,220,222,.62)}
+html:has(body.bt){background:#050506}
+body.bt:before{background:radial-gradient(800px 520px at 8% 0%,rgba(225,29,46,.45),transparent 62%),radial-gradient(700px 480px at 92% 100%,rgba(160,16,30,.35),transparent 60%),linear-gradient(160deg,#4a0710 0%,#14070a 45%,#050506 100%)}
+.bt .logo,.bt .foot .av{background:linear-gradient(135deg,#ff4655,#a0101e);color:#fff}
+.bt .ni.on{background:linear-gradient(180deg,rgba(255,70,85,.5),rgba(160,16,30,.35));border-color:rgba(255,120,130,.6)}
+.bt .ic{background:rgba(255,70,85,.16)}.bt .ni.on .ic{background:rgba(255,255,255,.2)}
+.bt .ni:hover{background:rgba(255,70,85,.12)}
+.bt .btn{border-color:rgba(255,120,130,.35);background:linear-gradient(180deg,rgba(255,70,85,.2),rgba(255,70,85,.06))}
+.bt .btn:hover{background:rgba(255,70,85,.3)}
+.bt .btn.pri{background:linear-gradient(135deg,#ff4655,#b3101f);color:#fff;border-color:#ff8a93;box-shadow:0 6px 24px rgba(225,29,46,.45)}
+.bt .panel,.bt .stat{border-color:rgba(255,120,130,.22)}
+.bt th{color:#ff9aa3}.bt .tab.on{background:linear-gradient(135deg,#ff4655,#b3101f);color:#fff;border-color:#ff8a93}
+.bt .bars .bar{background:linear-gradient(180deg,#ff4655,#a0101e)}.bt .bars .bar.p{background:rgba(255,255,255,.3)}.bt .legend i{background:#ff4655}.bt .legend i.p{background:rgba(255,255,255,.3)}
+.bt .pill{background:rgba(255,70,85,.2);border-color:rgba(255,120,130,.5)}.bt .bd{background:rgba(255,70,85,.25);color:#ffb3ba}
+.bt h1{text-shadow:0 0 24px rgba(225,29,46,.5)}
+.bt input,.bt select,.bt textarea{border-color:rgba(255,120,130,.25)}
+.bt input:focus,.bt select:focus,.bt textarea:focus{border-color:#ff6b78;background:rgba(255,70,85,.08)}
+.bt select option{background:#1d0b0e}
+.bt .modal{background:linear-gradient(180deg,#2a0c11,#0f0809);border-color:rgba(255,120,130,.35)}
+.bt .x{background:rgba(255,70,85,.2)}
+.bt .nm{background:#1d0b0e;border-color:rgba(255,120,130,.35)}.bt .nm a:hover{background:rgba(255,70,85,.2)}
+.bt .toast{background:linear-gradient(135deg,#ff4655,#b3101f);color:#fff}
+.bt .lock{background:radial-gradient(800px 500px at 50% 30%,#4a0710,#060607)}
+.bt .st tr.h td{background:rgba(255,70,85,.1)}
+.bt .mbtn{background:rgba(255,70,85,.25)}
+@media(max-width:900px){.bt .side{background:linear-gradient(180deg,#2a0c11,#0d0708)}}
 </style>
 </head>
-<body>
+<body class="bt">
 <div class="app">
   <aside class="side" id="side">
     <div class="brand"><div class="logo" id="logo">GM</div><div><b id="brandName">Client</b><small>Billing &amp; Accounts</small></div></div>
@@ -435,7 +462,7 @@ const btn = (l, f, pri) => `<button class="btn ${pri ? "pri" : ""}" onclick="${f
 function render() {
   if (multi() && !CU) { $("nav").innerHTML = ""; $("main").innerHTML = ""; return; }
   if (!pageOk(page)) page = firstPage();
-  document.body.dataset.lv = pageLv();
+  document.body.dataset.lv = pageLv(); document.body.classList.toggle("bt", S().theme !== "classic");
   $("nav").innerHTML = navHtml();
   $("brandName").textContent = S().bizName || CLIENT_NAME;
   $("logo").textContent = (S().bizName || CLIENT_NAME).replace(/[^A-Za-z0-9 ]/g, "").split(" ").map(w => w[0]).join("").slice(0, 3).toUpperCase();
@@ -1149,14 +1176,14 @@ PAGES.settings = () => {
   const s = S();
   return {
     title: "Settings", sub: "Business details printed on every invoice", noFy: true, actions: btn("Save settings", "saveSettings()", true),
-    body: `<div class="panel"><h3>Business</h3><div class="grid">${fld("Business name", `<input id="s_biz" value="${esc(s.bizName)}">`)}${fld("GSTIN", `<input id="s_gstin" value="${esc(s.gstin)}" style="text-transform:uppercase">`)}${fld("PAN", `<input id="s_pan" value="${esc(s.pan)}">`)}${fld("State (for CGST/SGST vs IGST)", `<select id="s_state">${opts(STATES, s.state)}</select>`)}${fld("Phone", `<input id="s_phone" value="${esc(s.phone)}">`)}${fld("Email", `<input id="s_email" value="${esc(s.email)}">`)}${fld("Address", `<textarea id="s_addr">${esc(s.address)}</textarea>`, "full")}${fld("Invoice logo", `<div style="background:#0d0d10;border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><img id="logoPrev" src="${s.logo === "none" ? "" : (s.logo || DEF_LOGO)}" style="height:44px;width:auto;${s.logo === "none" ? "display:none" : ""}"><input type="file" accept="image/*" onchange="logoPick(this)" style="max-width:240px"><a class="btn" onclick="logoReset()">Use default</a><a class="btn" onclick="logoReset('none')">Remove</a></div><p class="note" style="margin-top:6px">Shown on invoices, bills and receipts. Use a logo that looks good on a dark red background (white or transparent).</p>`, "full")}</div></div>
+    body: `<div class="panel"><h3>Business</h3><div class="grid">${fld("Business name", `<input id="s_biz" value="${esc(s.bizName)}">`)}${fld("GSTIN", `<input id="s_gstin" value="${esc(s.gstin)}" style="text-transform:uppercase">`)}${fld("PAN", `<input id="s_pan" value="${esc(s.pan)}">`)}${fld("State (for CGST/SGST vs IGST)", `<select id="s_state">${opts(STATES, s.state)}</select>`)}${fld("Phone", `<input id="s_phone" value="${esc(s.phone)}">`)}${fld("Email", `<input id="s_email" value="${esc(s.email)}">`)}${fld("Address", `<textarea id="s_addr">${esc(s.address)}</textarea>`, "full")}${fld("App theme", `<select id="s_theme">${opts([["blood", "Blood Moon (red & black)"], ["classic", "Classic dark"]], s.theme === "classic" ? "classic" : "blood")}</select>`)}${fld("Invoice logo", `<div style="background:#0d0d10;border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><img id="logoPrev" src="${s.logo === "none" ? "" : (s.logo || DEF_LOGO)}" style="height:44px;width:auto;${s.logo === "none" ? "display:none" : ""}"><input type="file" accept="image/*" onchange="logoPick(this)" style="max-width:240px"><a class="btn" onclick="logoReset()">Use default</a><a class="btn" onclick="logoReset('none')">Remove</a></div><p class="note" style="margin-top:6px">Shown on invoices, bills and receipts. Use a logo that looks good on a dark red background (white or transparent).</p>`, "full")}</div></div>
     <div class="panel"><h3>Bank & terms</h3><div class="grid">${fld("Bank name", `<input id="s_bank" value="${esc(s.bank)}">`)}${fld("Account number", `<input id="s_acc" value="${esc(s.acc)}">`)}${fld("IFSC", `<input id="s_ifsc" value="${esc(s.ifsc)}">`)}${fld("UPI ID", `<input id="s_upi" value="${esc(s.upi)}">`)}${fld("Invoice terms", `<textarea id="s_terms">${esc(s.terms)}</textarea>`, "full")}</div></div>
     <div class="panel"><h3>Accounts</h3><div class="grid">${fld("Sales prefix", `<input id="s_sp" value="${esc(s.salePrefix)}">`)}${fld("Purchase prefix", `<input id="s_pp" value="${esc(s.purchPrefix)}">`)}${fld("Opening cash & bank balance (₹)", `<input type="number" step="any" id="s_oc" value="${s.openingCash}">`)}${fld("…of which held in bank/UPI (₹)", `<input type="number" step="any" id="s_ob" value="${s.openingBank || 0}">`)}${fld("UPI QR on unpaid invoices", `<select id="s_qr">${opts([["yes", "Show (needs UPI ID above)"], ["no", "Hide"]], s.qrOn === false ? "no" : "yes")}</select>`)}${fld("Lock PIN (leave empty for none)", `<input type="password" id="s_pin" value="${esc(s.pin)}" maxlength="8" autocomplete="new-password">`)}</div><p class="note" style="margin-top:12px">The PIN only hides the screen on a shared computer — it is not encryption.</p></div>${usersPanel()}${tplPanel()}${ghPanel()}`
   };
 };
 function saveSettings() {
   if (!ck("__owner", 1)) return;
-  Object.assign(S(), {bizName: val("s_biz") || CLIENT_NAME, gstin: val("s_gstin").toUpperCase(), pan: val("s_pan").toUpperCase(), state: val("s_state"), phone: val("s_phone"), email: val("s_email"), address: val("s_addr"), bank: val("s_bank"), acc: val("s_acc"), ifsc: val("s_ifsc"), upi: val("s_upi"), terms: val("s_terms"), salePrefix: val("s_sp") || "INV", purchPrefix: val("s_pp") || "PUR", openingCash: num(val("s_oc")), pin: val("s_pin"), tplInvoice: val("s_ti"), tplReceipt: val("s_tr"), tplPayment: val("s_tp"), tplReminder: val("s_trm"), openingBank: num(val("s_ob")), qrOn: val("s_qr") !== "no"});
+  Object.assign(S(), {bizName: val("s_biz") || CLIENT_NAME, gstin: val("s_gstin").toUpperCase(), pan: val("s_pan").toUpperCase(), state: val("s_state"), phone: val("s_phone"), email: val("s_email"), address: val("s_addr"), bank: val("s_bank"), acc: val("s_acc"), ifsc: val("s_ifsc"), upi: val("s_upi"), terms: val("s_terms"), salePrefix: val("s_sp") || "INV", purchPrefix: val("s_pp") || "PUR", openingCash: num(val("s_oc")), pin: val("s_pin"), tplInvoice: val("s_ti"), tplReceipt: val("s_tr"), tplPayment: val("s_tp"), tplReminder: val("s_trm"), openingBank: num(val("s_ob")), qrOn: val("s_qr") !== "no", theme: val("s_theme") === "classic" ? "classic" : "blood"});
   save(); render(); toast("Settings saved");
 }
 
