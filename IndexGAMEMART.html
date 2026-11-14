@@ -159,7 +159,6 @@ label{display:block;font-size:12px;font-weight:600;color:var(--mut);margin:0 0 6
 .paper.bm .sum .t div.g{background:#fff;color:#a0101e;border:0;border-radius:10px;padding:7px 10px;margin-top:6px}
 .paper.bm .pf{border-top:1px solid rgba(255,255,255,.25);color:#ffb3ba}
 .paper.bm img[alt="UPI QR"]{background:#fff;padding:4px;border-radius:8px}
-.pdfhost .paper.bm{min-height:1123px}
 .paper .stp{display:inline-block;margin-top:6px;padding:2px 10px;border:2px solid;border-radius:6px;font-weight:800;font-size:12px;letter-spacing:1px}
 body[data-lv="0"] .act a.ed,body[data-lv="1"] .act a.ed,body[data-lv="0"] .act a.del,body[data-lv="1"] .act a.del,body[data-lv="2"] .act a.del{display:none}
 #print{display:none}
@@ -714,8 +713,8 @@ async function makePdf(html) {
   try {
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
     const canvas = await html2canvas(host, {scale: 2, backgroundColor: "#ffffff", useCORS: true});
-    const pdf = new window.jspdf.jsPDF({unit: "mm", format: "a4"});
-    const W = 210, H = 297, k = canvas.width / W, pageH = Math.floor(H * k);
+    const W = 210, H = 297, k = canvas.width / W, pageH = Math.floor(H * k), mm = canvas.height / k;
+    const pdf = mm <= H ? new window.jspdf.jsPDF({unit: "mm", format: [W, Math.max(mm, 60)], orientation: mm > W ? "p" : "l"}) : new window.jspdf.jsPDF({unit: "mm", format: "a4"});
     for (let y = 0, i = 0; y < canvas.height; y += pageH, i++) {
       const c = document.createElement("canvas"); c.width = canvas.width; c.height = Math.min(pageH, canvas.height - y);
       c.getContext("2d").drawImage(canvas, 0, y, canvas.width, c.height, 0, 0, canvas.width, c.height);
