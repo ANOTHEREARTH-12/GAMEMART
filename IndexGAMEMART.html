@@ -1229,7 +1229,7 @@ async function ghConnect() {
 }
 function ghDisconnect() {
   if (!confirm("Disconnect GitHub sync on this device? Your data stays here and on GitHub.")) return;
-  GH.cfg = null; GH.store(); $("saved").style.color = ""; $("saved").textContent = "Consultancy"; render(); toast("Disconnected");
+  GH.cfg = null; GH.store(); ghStatus("Saved on this device"); render(); toast("Disconnected");
 }
 function ghPanel() {
   const c = GH.cfg || {};
@@ -1963,7 +1963,7 @@ function bankCsv() {
 function navBadge(k) { let n = 0; try { if (k === "bankrec") n = BK().lines.filter(l => bkSt(l) !== "cleared").length; else if (k === "items") n = lowItems().length; } catch (e) {} return n ? `<span class="bd">${n}</span>` : ""; }
 /* ---------------- boot ---------------- */
 document.addEventListener("keydown", e => { if (e.key === "Escape" && $("layer").innerHTML) closeModal(); });
-$("saved").textContent = "Consultancy";
+ghStatus("Ready");
 restoreUser();
 render();
 if (db.users.length) ensureLogin(); else if (S().pin) showLock();
