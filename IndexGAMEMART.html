@@ -35,6 +35,9 @@ body:before{content:"";position:fixed;inset:0;z-index:-1;background:radial-gradi
 .foot .sd.busy{background:#ffd27a;box-shadow:0 0 0 4px rgba(255,210,122,.16);animation:sdp 1s infinite}
 .foot .sd.bad{background:#ff8a8a;box-shadow:0 0 0 4px rgba(255,138,138,.16)}
 @keyframes sdp{50%{opacity:.35}}
+.grp.gc{cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}.grp.gc i{font-style:normal;font-size:12px;transition:.2s}.grp.gc.cl i{transform:rotate(-90deg)}
+.bd.bad{background:rgba(255,138,138,.16);color:#ff8a8a}
+.nw{position:relative}.nm{display:none;position:absolute;right:0;top:calc(100% + 8px);min-width:230px;z-index:30;padding:8px;border-radius:18px;border:1px solid var(--line);background:#1b1b1f;box-shadow:0 18px 40px rgba(0,0,0,.5)}.nm.show{display:block}.nm a{display:block;padding:10px 12px;border-radius:12px;cursor:pointer;font-weight:600;font-size:14px;white-space:nowrap}.nm a:hover{background:rgba(255,255,255,.08)}
 .bd{margin-left:auto;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(255,210,122,.16);color:#ffd27a}
 .foot small{color:var(--mut);font-size:12px;line-height:1.3;display:block}
 /* main */
@@ -161,6 +164,11 @@ body[data-lv="0"] .act a.ed,body[data-lv="1"] .act a.ed,body[data-lv="0"] .act a
  .side.open{transform:none}
  .mbtn{display:inline-grid;place-items:center;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:rgba(255,255,255,.1);color:#fff;font-size:20px;cursor:pointer;margin-bottom:12px}
  h1{font-size:23px}
+ .ni{padding:9px 12px;font-size:16px;min-height:52px}
+ .grp{padding:18px 12px 10px;font-size:12px}
+ .btn{padding:12px 18px;font-size:15px}
+ input,select,textarea{font-size:16px}
+ .nm{right:auto;left:0}
 }
 @media(max-width:560px){.stats{grid-template-columns:1fr 1fr;gap:10px}.stat b{font-size:21px}}
 </style>
@@ -215,7 +223,7 @@ const ICON = {
 const svg = k => `<svg viewBox="0 0 24 24">${ICON[k]}</svg>`;
 const NAV = [
  ["WORKSPACE",[["dashboard","Dashboard","dash"],["sales","Sales","sales"],["purchases","Purchases","purch"],["receipts","Receipts","rec"],["payments","Payments","pay"],["entries","Expenses & Others","exp"],["parties","Parties","users"],["items","Items","box"]]],
- ["REPORTS",[["outstanding","Outstanding & Ageing","clock"],["cashbook","Cash Book","book"],["gst","GST Reports","gst"],["pnl","Profit & Loss","pl"],["bs","Balance Sheet","bs"]]],
+ ["REPORTS",[["outstanding","Outstanding","clock"],["cashbook","Cash Book","book"],["gst","GST Reports","gst"],["pnl","Profit & Loss","pl"],["bs","Balance Sheet","bs"]]],
  ["DATA",[["backup","Import / Backup","db"],["settings","Settings","set"],["__lock","Lock","lock"]]]
 ];
 
@@ -397,6 +405,7 @@ function nextVNo(kind) {
 }
 
 /* ---------------- app state / nav ---------------- */
+let NAVC = {}; try { NAVC = JSON.parse(localStorage.getItem(KEY + "_nav") || "{}"); } catch (e) {}
 let page = "dashboard", Q = {}, R = null, CUR = null, gstTab = "gstr1", MSAVE = null, DR = null;
 function setPage(p) {
   if (p === "__lock") return lockApp();
@@ -404,8 +413,8 @@ function setPage(p) {
   page = p; Q = {}; $("side").classList.remove("open"); render(); window.scrollTo(0, 0);
 }
 function navHtml() {
-  return NAV.map(([g, items]) => { const it = items.filter(([k]) => pageOk(k)); return it.length ? `<div class="grp">${g}</div>` + it.map(([k, l, i]) =>
-    `<div class="ni ${k === page ? "on" : ""}" onclick="setPage('${k}')"><span class="ic">${svg(i)}</span>${l}${navBadge(k)}</div>`).join("") : ""; }).join("") +
+  return NAV.map(([g, items]) => { const it = items.filter(([k]) => pageOk(k)); const cl = NAVC[g] && !it.some(([k]) => k === page); return it.length ? `<div class="grp gc ${cl ? "cl" : ""}" onclick="navTog('${g}')">${g}<i>▾</i></div>` + (cl ? "" : it.map(([k, l, i]) =>
+    `<div class="ni ${k === page ? "on" : ""}" onclick="setPage('${k}')"><span class="ic">${svg(i)}</span>${l}${navBadge(k)}</div>`).join("")) : ""; }).join("") +
     (multi() && CU ? `<div class="note" style="padding:12px 14px">Signed in: <b>${esc(CU.name)}</b>${CU.owner ? " (owner)" : ""}</div>` : "");
 }
 const btn = (l, f, pri) => `<button class="btn ${pri ? "pri" : ""}" onclick="${f}">${l}</button>`;
@@ -419,7 +428,7 @@ function render() {
   document.title = (S().bizName || CLIENT_NAME) + " · Billing & Accounts";
   CUR = null;
   const p = PAGES[page]();
-  $("main").innerHTML = `<button class="mbtn" onclick="$('side').classList.toggle('open')">☰</button><div class="top"><div><h1>${p.title}</h1><p class="sub">${p.sub || ""}</p></div><div class="acts">${p.noFy ? "" : fySelect()}${actionsOk() ? (p.actions || "") : ""}</div></div>${p.body}`;
+  $("main").innerHTML = `<button class="mbtn" onclick="$('side').classList.toggle('open')">☰</button><div class="top"><div><h1>${p.title}</h1><p class="sub">${p.sub || ""}</p></div><div class="acts">${p.noFy ? "" : fySelect()}${newMenu()}${actionsOk() ? (p.actions || "") : ""}</div></div>${p.body}`;
   if (CUR) refreshRows();
   if (p.after) p.after();
 }
@@ -1960,7 +1969,25 @@ function bankCsv() {
   download(CLIENT_NAME + "_bank_lines_" + today() + ".csv", "\ufeff" + rows.map(r => r.map(csvq).join(",")).join("\r\n"), "text/csv");
 }
 
-function navBadge(k) { let n = 0; try { if (k === "bankrec") n = BK().lines.filter(l => bkSt(l) !== "cleared").length; else if (k === "items") n = lowItems().length; } catch (e) {} return n ? `<span class="bd">${n}</span>` : ""; }
+const cmpInr = v => v >= 1e7 ? "₹" + (v / 1e7).toFixed(1).replace(/\.0$/, "") + "Cr" : v >= 1e5 ? "₹" + (v / 1e5).toFixed(1).replace(/\.0$/, "") + "L" : v >= 1e3 ? "₹" + Math.round(v / 1e3) + "K" : "₹" + Math.round(v);
+function navBadge(k) {
+  let n = 0;
+  try {
+    if (k === "bankrec") n = BK().lines.filter(l => bkSt(l) !== "cleared").length;
+    else if (k === "items") n = lowItems().length;
+    else if (k === "outstanding") { const o = r2(sum(ageRows("recv"), r => r.b[1] + r.b[2] + r.b[3])); if (o > 0.5) return `<span class="bd bad" title="Overdue more than 30 days">${cmpInr(o)}</span>`; }
+  } catch (e) {}
+  return n ? `<span class="bd">${n}</span>` : "";
+}
+function navTog(g) { NAVC[g] = !NAVC[g]; try { localStorage.setItem(KEY + "_nav", JSON.stringify(NAVC)); } catch (e) {} $("nav").innerHTML = navHtml(); }
+let NEWIT = [];
+function newMenu() {
+  NEWIT = [["Sales invoice", "sales", () => docForm("sales")], ["Purchase bill", "purchases", () => docForm("purchases")], ["Receipt", "receipts", () => vouchForm("receipts")], ["Payment", "payments", () => vouchForm("payments")], ["Expense / other entry", "entries", () => entryForm()], ["Import bank statement", "bankrec", () => { setPage("bankrec"); bankImport(); }]].filter(x => can(x[1], 2));
+  return NEWIT.length ? `<div class="nw"><button class="btn" onclick="newTog(event)">+ New ▾</button><div class="nm" id="newm">${NEWIT.map((x, i) => `<a onclick="newGo(${i})">${x[0]}</a>`).join("")}</div></div>` : "";
+}
+function newTog(e) { e.stopPropagation(); $("newm").classList.toggle("show"); }
+function newGo(i) { $("newm").classList.remove("show"); NEWIT[i][2](); }
+document.addEventListener("click", () => { const m = $("newm"); if (m) m.classList.remove("show"); });
 /* ---------------- boot ---------------- */
 document.addEventListener("keydown", e => { if (e.key === "Escape" && $("layer").innerHTML) closeModal(); });
 ghStatus("Ready");
