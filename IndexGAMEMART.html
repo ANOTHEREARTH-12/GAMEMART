@@ -351,10 +351,10 @@ function docCalc(d) {
   const lines = (d.lines || []).map(l => {
     const gross = num(l.qty) * num(l.rate);
     const tx = r2(Math.max(0, gross - (l.dm === "amt" ? num(l.disc) : gross * num(l.disc) / 100)));
-    const tax = d.nog ? 0 : r2(tx * num(l.gst) / 100);
+    const tax = r2(tx * num(l.gst) / 100);
     const c = intra ? r2(tax / 2) : 0, s = intra ? r2(tax - c) : 0, i = intra ? 0 : tax;
     taxable += tx; cgst += c; sgst += s; igst += i;
-    return Object.assign({}, l, {gst: d.nog ? 0 : l.gst, taxable: tx, tax, cgst: c, sgst: s, igst: i, amount: r2(tx + tax), discAmt: r2(gross - tx)});
+    return Object.assign({}, l, {taxable: tx, tax, cgst: c, sgst: s, igst: i, amount: r2(tx + tax), discAmt: r2(gross - tx)});
   });
   taxable = r2(taxable); cgst = r2(cgst); sgst = r2(sgst); igst = r2(igst);
   const tax = r2(cgst + sgst + igst), raw = r2(taxable + tax), total = Math.round(raw);
@@ -560,14 +560,14 @@ function docForm(kind, id) {
    ${fld("GST filing", `<div class="seg" id="f_gst"><a class="${d.nog ? "" : "on"}" onclick="gstMode(true)">Filing</a><a class="${d.nog ? "on ng" : ""}" onclick="gstMode(false)">Non-filing</a></div>`)}
    ${isS ? "" : fld("Supplier Bill No.", `<input value="${esc(d.billNo)}" oninput="DR.d.billNo=this.value">`)}
   </div>
-  <div class="note" id="f_gnote" style="margin-top:10px;display:${d.nog ? "block" : "none"}">Non-filing: no tax is charged, and this ${isS ? "bill" : "purchase"} is left out of the GST filing reports (GSTR-1 / 3B, HSN). It still counts in your sales, ledger, P&amp;L and balance sheet.</div>
-  <div class="lines tw" style="margin-top:16px"><table><thead id="lh"></thead><tbody id="lb"></tbody></table></div>
+  <div class="note" id="f_gnote" style="margin-top:10px;display:${d.nog ? "block" : "none"}">Non-filing: GST is calculated as usual, but this ${isS ? "bill" : "purchase"} has its own number series and is left out of the GST filing reports (GSTR-1 / 3B, HSN). It still counts in your sales, ledger, P&amp;L and balance sheet.</div>
+  <div class="lines tw" style="margin-top:16px"><table><thead><tr>${heads(["Item", "Description", "HSN/SAC", "Qty", "Rate (excl. GST)", "Disc (₹)", "GST %", ["Amount", "r"], ""])}</tr></thead><tbody id="lb"></tbody></table></div>
   <div style="margin-top:8px">${btn("+ Add line", "addLine()")}</div>
   <div class="grid" style="margin-top:14px">${fld("Notes (shown on document)", `<textarea oninput="DR.d.notes=this.value">${esc(d.notes)}</textarea>`, "full")}</div>
   <div class="tot" id="tot"></div>
   <div class="panel" style="margin-top:16px;padding:16px"><label style="display:flex;gap:10px;align-items:center;cursor:pointer;margin:0"><input type="checkbox" id="pay_on" style="width:20px;height:20px;padding:0" ${DR.pay.on ? "checked" : ""} onchange="payToggle(this.checked)"><b>${isS ? "Payment received now — auto-create receipt" : "Payment made now — auto-create payment voucher"}</b></label><div id="pay_f"></div></div>`;
   openModal((ex ? "Edit " : "New ") + (isS ? "Sales Invoice" : "Purchase Bill"), body, "Save", saveDoc);
-  drawHead(); drawLines(); payDraw(); updTot();
+  drawLines(); payDraw(); updTot();
 }
 function payDraw() {
   const P0 = DR.pay, isS = DR.kind === "sales", vk = isS ? "receipts" : "payments";
@@ -600,15 +600,12 @@ function qpSave(sid) {
   toast(isNew ? "Added & selected: " + name : "Already exists — selected " + name);
 }
 function docParty(id) { DR.d.partyId = id; DR.d.pos = (P(id) || {}).state || S().state; $("f_pos").value = DR.d.pos; updTot(); }
-function drawHead() { $("lh").innerHTML = "<tr>" + heads(["Item", "Description", "HSN/SAC", "Qty", DR.d.nog ? "Rate" : "Rate (excl. GST)", "Disc (₹)", "GST %", ["Amount", "r"], ""]) + "</tr>"; }
 function gstMode(on) {
   const d = DR.d; d.nog = !on;
   if (DR.isNew && d.no === DR.autoNo) { d.no = DR.autoNo = nextNo(DR.kind, !on); $("f_no").value = d.no; }
   $("f_ser").textContent = on ? "· Filing series" : "· Non-filing series";
-  d.lines.forEach(l => { if (!on) { if (l.gst0 === undefined) l.gst0 = l.gst; l.gst = 0; } else if (l.gst0 !== undefined) { l.gst = l.gst0; delete l.gst0; } });
   const g = $("f_gst").children; g[0].className = on ? "on" : ""; g[1].className = on ? "" : "on ng";
   $("f_gnote").style.display = on ? "none" : "block";
-  drawHead(); drawLines(); updTot();
 }
 function drawLines() {
   const isS = DR.kind === "sales";
@@ -619,13 +616,13 @@ function drawLines() {
    <td style="width:80px"><input type="number" step="any" value="${l.qty}" oninput="setL(${i},'qty',this.value)"></td>
    <td style="width:110px"><input type="number" step="any" value="${l.rate}" oninput="setL(${i},'rate',this.value)"></td>
    <td style="width:90px"><input type="number" step="any" value="${l.disc}" oninput="setL(${i},'disc',this.value)"></td>
-   <td style="width:84px"><select onchange="setL(${i},'gst',this.value)" ${DR.d.nog ? "disabled" : ""}>${opts(GST_RATES.map(g => [g, g + "%"]), l.gst)}</select></td>
+   <td style="width:84px"><select onchange="setL(${i},'gst',this.value)">${opts(GST_RATES.map(g => [g, g + "%"]), l.gst)}</select></td>
    <td class="r" style="width:110px;font-weight:700" id="la${i}">${inr(0)}</td>
    <td style="width:36px"><div class="x" onclick="delLine(${i})" style="width:30px;height:30px;font-size:17px">×</div></td></tr>`).join("");
 }
 function pickItem(i, id) {
   const l = DR.d.lines[i], it = db.items.find(x => x.id === id); l.itemId = id;
-  if (it) { l.desc = it.name; l.hsn = it.hsn; l.unit = it.unit; l.rate = DR.kind === "sales" ? it.saleRate : it.costRate; if (DR.d.nog) { l.gst0 = it.gst; l.gst = 0; } else l.gst = it.gst; }
+  if (it) { l.desc = it.name; l.hsn = it.hsn; l.unit = it.unit; l.rate = DR.kind === "sales" ? it.saleRate : it.costRate; l.gst = it.gst; }
   drawLines(); updTot();
 }
 function setL(i, f, v) { DR.d.lines[i][f] = f === "gst" ? +v : num(v); updTot(); }
@@ -634,8 +631,8 @@ function delLine(i) { if (DR.d.lines.length > 1) DR.d.lines.splice(i, 1); else D
 function updTot() {
   const c = docCalc(DR.d);
   c.lines.forEach((l, i) => { const e = $("la" + i); if (e) e.textContent = inr(l.amount); });
-  $("tot").innerHTML = `<div><span>${DR.d.nog ? "Amount" : "Taxable value"}</span><span>${inr(c.taxable)}</span></div>` +
-    (DR.d.nog ? "" : c.intra ? `<div><span>CGST</span><span>${inr(c.cgst)}</span></div><div><span>SGST</span><span>${inr(c.sgst)}</span></div>` : `<div><span>IGST</span><span>${inr(c.igst)}</span></div>`) +
+  $("tot").innerHTML = `<div><span>Taxable value</span><span>${inr(c.taxable)}</span></div>` +
+    (c.intra ? `<div><span>CGST</span><span>${inr(c.cgst)}</span></div><div><span>SGST</span><span>${inr(c.sgst)}</span></div>` : `<div><span>IGST</span><span>${inr(c.igst)}</span></div>`) +
     `<div><span>Round off</span><span>${inr(c.round)}</span></div><div class="g"><span>Total</span><span>${inr(c.total)}</span></div><div style="font-size:12px;color:var(--mut)">${words(c.total)} Rupees Only</div>`;
   if (DR.pay && DR.pay.on) { if (DR.pay.auto) { DR.pay.amount = c.total; const e = $("pay_amt"); if (e) e.value = c.total; } payHint(); }
 }
@@ -681,12 +678,12 @@ function logoPick(inp) {
 }
 function logoReset(mode) { if (mode === "none") S().logo = "none"; else delete S().logo; save(); $("logoPrev").src = S().logo === "none" ? "" : DEF_LOGO; $("logoPrev").style.display = S().logo === "none" ? "none" : "block"; toast(mode === "none" ? "Logo removed — name shows instead" : "Default logo restored"); }
 function paperHtml(kind, d) {
-  const isS = kind === "sales", ng = !!d.nog, c = docCalc(d), p = P(d.partyId) || {}, s = S(), al = allocAll().inv[d.id] || {total: c.total, paid: 0, due: c.total}, st = payStat(al);
-  return `<div class="paper bm"><div class="hd"><div>${brandHtml(s)}<div>${esc(s.address).replace(/\n/g, "<br>")}</div><div>${s.phone ? "Ph: " + esc(s.phone) : ""} ${s.email ? " · " + esc(s.email) : ""}</div><div>${s.gstin && !ng ? "<b>GSTIN:</b> " + esc(s.gstin) : ""} ${s.pan ? (s.gstin && !ng ? " · " : "") + "<b>PAN:</b> " + esc(s.pan) : ""}</div></div><div><div class="ttl">${isS ? (ng ? "BILL OF SUPPLY" : "TAX INVOICE") : "PURCHASE BILL"}</div><div style="text-align:right"><span class="stp" style="color:${st === "Paid" ? "#1a7f37" : st === "Part paid" ? "#b45309" : "#b91c1c"}">${st.toUpperCase()}</span></div><div style="text-align:right;margin-top:8px"><b>No:</b> ${esc(d.no)}<br><b>Date:</b> ${fdate(d.date)}${d.billNo ? `<br><b>Supplier Bill:</b> ${esc(d.billNo)}` : ""}</div></div></div>
-  <div class="meta"><div class="box"><h5>${isS ? "Bill To" : "Supplier"}</h5><b>${esc(p.name)}</b><br>${esc(p.address || "").replace(/\n/g, "<br>")}${p.gstin ? "<br>GSTIN: " + esc(p.gstin) : ""}${p.phone ? "<br>Ph: " + esc(p.phone) : ""}</div><div class="box"><h5>Place of Supply</h5><b>${esc(d.pos)}</b><br>${ng ? "No GST charged" : c.intra ? "Intra-state (CGST + SGST)" : "Inter-state (IGST)"}</div></div>
-  <table><thead><tr>${ng ? `<th>#</th><th style="text-align:left">Description</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Disc (₹)</th><th class="r">Amount</th>` : `<th>#</th><th style="text-align:left">Description</th><th>HSN/SAC</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Disc (₹)</th><th class="r">Taxable</th><th class="r">GST%</th><th class="r">Amount</th>`}</tr></thead><tbody>${c.lines.map((l, i) => ng ? `<tr><td>${i + 1}</td><td>${esc(l.desc)}</td><td class="r">${l.qty}${l.unit ? " " + esc(l.unit) : ""}</td><td class="r">${inr(l.rate)}</td><td class="r">${l.discAmt ? inr(l.discAmt) : "—"}</td><td class="r">${inr(l.amount)}</td></tr>` : `<tr><td>${i + 1}</td><td>${esc(l.desc)}</td><td>${esc(l.hsn)}</td><td class="r">${l.qty}${l.unit ? " " + esc(l.unit) : ""}</td><td class="r">${inr(l.rate)}</td><td class="r">${l.discAmt ? inr(l.discAmt) : "—"}</td><td class="r">${inr(l.taxable)}</td><td class="r">${l.gst}%</td><td class="r">${inr(l.amount)}</td></tr>`).join("")}</tbody></table>
+  const isS = kind === "sales", c = docCalc(d), p = P(d.partyId) || {}, s = S(), al = allocAll().inv[d.id] || {total: c.total, paid: 0, due: c.total}, st = payStat(al);
+  return `<div class="paper bm"><div class="hd"><div>${brandHtml(s)}<div>${esc(s.address).replace(/\n/g, "<br>")}</div><div>${s.phone ? "Ph: " + esc(s.phone) : ""} ${s.email ? " · " + esc(s.email) : ""}</div><div>${s.gstin ? "<b>GSTIN:</b> " + esc(s.gstin) : ""} ${s.pan ? " · <b>PAN:</b> " + esc(s.pan) : ""}</div></div><div><div class="ttl">${isS ? "TAX INVOICE" : "PURCHASE BILL"}</div><div style="text-align:right"><span class="stp" style="color:${st === "Paid" ? "#1a7f37" : st === "Part paid" ? "#b45309" : "#b91c1c"}">${st.toUpperCase()}</span></div><div style="text-align:right;margin-top:8px"><b>No:</b> ${esc(d.no)}<br><b>Date:</b> ${fdate(d.date)}${d.billNo ? `<br><b>Supplier Bill:</b> ${esc(d.billNo)}` : ""}</div></div></div>
+  <div class="meta"><div class="box"><h5>${isS ? "Bill To" : "Supplier"}</h5><b>${esc(p.name)}</b><br>${esc(p.address || "").replace(/\n/g, "<br>")}${p.gstin ? "<br>GSTIN: " + esc(p.gstin) : ""}${p.phone ? "<br>Ph: " + esc(p.phone) : ""}</div><div class="box"><h5>Place of Supply</h5><b>${esc(d.pos)}</b><br>${c.intra ? "Intra-state (CGST + SGST)" : "Inter-state (IGST)"}</div></div>
+  <table><thead><tr><th>#</th><th style="text-align:left">Description</th><th>HSN/SAC</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Disc (₹)</th><th class="r">Taxable</th><th class="r">GST%</th><th class="r">Amount</th></tr></thead><tbody>${c.lines.map((l, i) => `<tr><td>${i + 1}</td><td>${esc(l.desc)}</td><td>${esc(l.hsn)}</td><td class="r">${l.qty}${l.unit ? " " + esc(l.unit) : ""}</td><td class="r">${inr(l.rate)}</td><td class="r">${l.discAmt ? inr(l.discAmt) : "—"}</td><td class="r">${inr(l.taxable)}</td><td class="r">${l.gst}%</td><td class="r">${inr(l.amount)}</td></tr>`).join("")}</tbody></table>
   <div class="sum"><div style="flex:1"><b>Amount in words:</b><br>${words(c.total)} Rupees Only${d.notes ? `<br><br><b>Notes:</b><br>${esc(d.notes).replace(/\n/g, "<br>")}` : ""}${isS && (s.bank || s.upi) ? `<br><br><b>Bank details</b><br>${esc(s.bank)} ${s.acc ? "· A/c " + esc(s.acc) : ""} ${s.ifsc ? "· IFSC " + esc(s.ifsc) : ""}${s.upi ? "<br>UPI: " + esc(s.upi) : ""}` : ""}${isS && s.terms ? `<br><br><b>Terms</b><br>${esc(s.terms).replace(/\n/g, "<br>")}` : ""}${isS ? upiQr(al.due, d.no) : ""}</div>
-  <div class="t"><div><span>${ng ? "Amount" : "Taxable value"}</span><span>${inr(c.taxable)}</span></div>${ng ? "" : c.intra ? `<div><span>CGST</span><span>${inr(c.cgst)}</span></div><div><span>SGST</span><span>${inr(c.sgst)}</span></div>` : `<div><span>IGST</span><span>${inr(c.igst)}</span></div>`}<div><span>Round off</span><span>${inr(c.round)}</span></div><div class="g"><span>Total</span><span>${inr(c.total)}</span></div>${al.paid > 0.5 ? `<div><span>Received</span><span>${inr(al.paid)}</span></div><div class="g"><span>Balance due</span><span>${inr(al.due)}</span></div>` : ""}<p style="margin-top:34px;text-align:right">For <b>${esc(s.bizName)}</b><br><br>Authorised Signatory</p></div></div>
+  <div class="t"><div><span>Taxable value</span><span>${inr(c.taxable)}</span></div>${c.intra ? `<div><span>CGST</span><span>${inr(c.cgst)}</span></div><div><span>SGST</span><span>${inr(c.sgst)}</span></div>` : `<div><span>IGST</span><span>${inr(c.igst)}</span></div>`}<div><span>Round off</span><span>${inr(c.round)}</span></div><div class="g"><span>Total</span><span>${inr(c.total)}</span></div>${al.paid > 0.5 ? `<div><span>Received</span><span>${inr(al.paid)}</span></div><div class="g"><span>Balance due</span><span>${inr(al.due)}</span></div>` : ""}<p style="margin-top:34px;text-align:right">For <b>${esc(s.bizName)}</b><br><br>Authorised Signatory</p></div></div>
   <div class="pf">Powered by ${FOOTER_BRAND}</div></div>`;
 }
 function printHtml(html) { $("print").innerHTML = html; window.print(); }
