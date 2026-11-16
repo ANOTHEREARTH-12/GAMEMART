@@ -147,6 +147,10 @@ label{display:block;font-size:12px;font-weight:600;color:var(--mut);margin:0 0 6
 .paper .sum .t div.g{border-top:2px solid #111;font-weight:800;font-size:15px;margin-top:4px;padding-top:6px}
 .paper .pf{margin-top:22px;padding-top:8px;border-top:1px solid #ccc;text-align:center;color:#777;font-size:10.5px}
 .pdfhost .paper{border-radius:0;padding:36px 40px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:rgba(255,255,255,.05)}.seg a{padding:9px 16px;border-radius:999px;cursor:pointer;font-weight:700;font-size:13px;color:var(--mut);white-space:nowrap;user-select:none}.seg a.on{background:linear-gradient(135deg,#ff4655,#b3101f);color:#fff;box-shadow:0 4px 14px rgba(225,29,46,.4)}.seg a.on.ng{background:linear-gradient(135deg,#6b6b73,#34343a)}
+.qpl{float:right;cursor:pointer;color:#ff9aa3;font-weight:700;font-size:12px;letter-spacing:.02em}.qpl:hover{text-decoration:underline}
+.qpb{border:1px solid var(--line);border-radius:20px;padding:14px;background:rgba(255,255,255,.04)}
+.qpb h4{font-size:13px;margin-bottom:10px;color:#ff9aa3;letter-spacing:.04em;text-transform:uppercase}
 /* invoice theme: Blood Moon */
 .paper.bm{background:linear-gradient(160deg,#7a0b17 0,#2a0508 38%,#0a0a0b 70%);color:#fff;border:1px solid #ff4655;border-radius:16px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .paper.bm .hd{border-bottom:1px solid rgba(255,255,255,.3)}
@@ -347,10 +351,10 @@ function docCalc(d) {
   const lines = (d.lines || []).map(l => {
     const gross = num(l.qty) * num(l.rate);
     const tx = r2(Math.max(0, gross - (l.dm === "amt" ? num(l.disc) : gross * num(l.disc) / 100)));
-    const tax = r2(tx * num(l.gst) / 100);
+    const tax = d.nog ? 0 : r2(tx * num(l.gst) / 100);
     const c = intra ? r2(tax / 2) : 0, s = intra ? r2(tax - c) : 0, i = intra ? 0 : tax;
     taxable += tx; cgst += c; sgst += s; igst += i;
-    return Object.assign({}, l, {taxable: tx, tax, cgst: c, sgst: s, igst: i, amount: r2(tx + tax), discAmt: r2(gross - tx)});
+    return Object.assign({}, l, {gst: d.nog ? 0 : l.gst, taxable: tx, tax, cgst: c, sgst: s, igst: i, amount: r2(tx + tax), discAmt: r2(gross - tx)});
   });
   taxable = r2(taxable); cgst = r2(cgst); sgst = r2(sgst); igst = r2(igst);
   const tax = r2(cgst + sgst + igst), raw = r2(taxable + tax), total = Math.round(raw);
@@ -426,12 +430,12 @@ function bsheet(asOn) {
 }
 
 /* ---------------- numbering ---------------- */
-function nextNo(kind) {
-  const [a, b] = fyRange();
-  const pre = (kind === "sales" ? S().salePrefix : S().purchPrefix) || (kind === "sales" ? "INV" : "PUR");
+function nextNo(kind, nof) {
+  const [a, b] = fyRange(), isS = kind === "sales";
+  const pre = nof ? ((isS ? S().nfSalePrefix : S().nfPurchPrefix) || (isS ? "NF" : "NFP")) : ((isS ? S().salePrefix : S().purchPrefix) || (isS ? "INV" : "PUR"));
   const tag = String(fy).slice(2) + "-" + String(fy + 1).slice(2);
   const used = new Set(db[kind].map(d => d.no));
-  let n = db[kind].filter(d => inR(d.date, a, b)).length + 1, no;
+  let n = db[kind].filter(d => !d.nog === !nof && inR(d.date, a, b)).length + 1, no;
   do { no = `${pre}/${tag}/${pad(n)}`; n++; } while (used.has(no));
   return no;
 }
@@ -527,7 +531,7 @@ function docPage(kind) {
   const cs = all.map(docCalc);
   CUR = () => { const AL = allocAll(); return all.slice().sort((x, y) => y.date.localeCompare(x.date) || y.no.localeCompare(x.no))
     .filter(d => (!Q.party || d.partyId === Q.party) && (!Q.st || payStat(AL.inv[d.id]) === Q.st) && match(d.no, pname(d.partyId), d.billNo || ""))
-    .map(d => { const c = docCalc(d), st = payStat(AL.inv[d.id]); return `<tr><td><b>${esc(d.no)}</b>${d.billNo ? `<small>Supplier bill: ${esc(d.billNo)}</small>` : ""}${byTag(d)}</td><td>${fdate(d.date)}</td><td>${esc(pname(d.partyId))}<small>${esc(d.pos || "")}</small></td><td class="r">${inr(c.taxable)}</td><td class="r">${inr(c.tax)}</td><td class="r"><b>${inr(c.total)}</b></td><td>${statPill(st)}${st === "Part paid" ? `<small>due ${inr(AL.inv[d.id].due)}</small>` : ""}</td><td class="act"><a onclick="viewDoc('${kind}','${d.id}')">Open</a><a class="ed" onclick="docForm('${kind}','${d.id}')">Edit</a><a class="del" onclick="delItem('${kind}','${d.id}')">Delete</a></td></tr>`; }).join(""); };
+    .map(d => { const c = docCalc(d), st = payStat(AL.inv[d.id]); return `<tr><td><b>${esc(d.no)}</b>${d.billNo ? `<small>Supplier bill: ${esc(d.billNo)}</small>` : ""}${byTag(d)}${d.nog ? `<small style="color:#ffb3ba">Non-filing</small>` : ""}</td><td>${fdate(d.date)}</td><td>${esc(pname(d.partyId))}<small>${esc(d.pos || "")}</small></td><td class="r">${inr(c.taxable)}</td><td class="r">${inr(c.tax)}</td><td class="r"><b>${inr(c.total)}</b></td><td>${statPill(st)}${st === "Part paid" ? `<small>due ${inr(AL.inv[d.id].due)}</small>` : ""}</td><td class="act"><a onclick="viewDoc('${kind}','${d.id}')">Open</a><a class="ed" onclick="docForm('${kind}','${d.id}')">Edit</a><a class="del" onclick="delItem('${kind}','${d.id}')">Delete</a></td></tr>`; }).join(""); };
   return {
     title: isS ? "Sales" : "Purchases", sub: isS ? "Create GST invoices, print them and share on WhatsApp" : "Record supplier bills and claim input tax credit",
     actions: btn(isS ? "+ New Invoice" : "+ New Bill", `docForm('${kind}')`, true),
@@ -545,22 +549,25 @@ function docForm(kind, id) {
   DR = {kind, d: ex ? JSON.parse(JSON.stringify(ex)) : {id: uid(), no: nextNo(kind), date: defDate(), partyId: isS ? "p_cash_c" : "p_cash_s", pos: "", lines: [blankLine()], notes: "", billNo: ""}};
   if (!DR.d.pos) DR.d.pos = (P(DR.d.partyId) || {}).state || S().state;
   DR.d.lines.forEach(l => { if (l.dm !== "amt") { l.disc = r2(num(l.qty) * num(l.rate) * num(l.disc) / 100); l.dm = "amt"; } });
+  DR.isNew = !ex; DR.autoNo = DR.d.no;
   const d = DR.d, vk = isS ? "receipts" : "payments", lk = ex && db[vk].find(r => r.invId === ex.id);
   DR.pay = lk ? {on: true, id: lk.id, no: lk.no, amount: lk.amount, mode: lk.mode, ref: lk.ref, auto: false} : {on: false, no: "", amount: "", mode: "Cash", ref: "", auto: true};
   const body = `<div class="grid">
-   ${fld(isS ? "Invoice No." : "Our Ref. No.", `<input id="f_no" value="${esc(d.no)}" oninput="DR.d.no=this.value">`)}
+   ${fld((isS ? "Invoice No." : "Our Ref. No.") + ` <span id="f_ser" style="color:#ff9aa3;font-weight:700">· ${d.nog ? "Non-filing series" : "Filing series"}</span>`, `<input id="f_no" value="${esc(d.no)}" oninput="DR.d.no=this.value">`)}
    ${fld("Date", `<input type="date" id="f_date" value="${d.date}" oninput="DR.d.date=this.value">`)}
-   ${fld(isS ? "Customer" : "Supplier", `<select onchange="docParty(this.value)">${opts(db.parties.map(p => [p.id, p.name]), d.partyId)}</select>`)}
+   ${partyFld(isS ? "Customer" : "Supplier", `<select id="f_party" onchange="docParty(this.value)">${opts(db.parties.map(p => [p.id, p.name]), d.partyId)}</select>`, "f_party")}
    ${fld("Place of Supply", `<select id="f_pos" onchange="DR.d.pos=this.value;updTot()">${opts(STATES, d.pos)}</select>`)}
+   ${fld("GST filing", `<div class="seg" id="f_gst"><a class="${d.nog ? "" : "on"}" onclick="gstMode(true)">Filing</a><a class="${d.nog ? "on ng" : ""}" onclick="gstMode(false)">Non-filing</a></div>`)}
    ${isS ? "" : fld("Supplier Bill No.", `<input value="${esc(d.billNo)}" oninput="DR.d.billNo=this.value">`)}
   </div>
-  <div class="lines tw" style="margin-top:16px"><table><thead><tr>${heads(["Item", "Description", "HSN/SAC", "Qty", "Rate (excl. GST)", "Disc (₹)", "GST %", ["Amount", "r"], ""])}</tr></thead><tbody id="lb"></tbody></table></div>
+  <div class="note" id="f_gnote" style="margin-top:10px;display:${d.nog ? "block" : "none"}">Non-filing: no tax is charged, and this ${isS ? "bill" : "purchase"} is left out of the GST filing reports (GSTR-1 / 3B, HSN). It still counts in your sales, ledger, P&amp;L and balance sheet.</div>
+  <div class="lines tw" style="margin-top:16px"><table><thead id="lh"></thead><tbody id="lb"></tbody></table></div>
   <div style="margin-top:8px">${btn("+ Add line", "addLine()")}</div>
   <div class="grid" style="margin-top:14px">${fld("Notes (shown on document)", `<textarea oninput="DR.d.notes=this.value">${esc(d.notes)}</textarea>`, "full")}</div>
   <div class="tot" id="tot"></div>
   <div class="panel" style="margin-top:16px;padding:16px"><label style="display:flex;gap:10px;align-items:center;cursor:pointer;margin:0"><input type="checkbox" id="pay_on" style="width:20px;height:20px;padding:0" ${DR.pay.on ? "checked" : ""} onchange="payToggle(this.checked)"><b>${isS ? "Payment received now — auto-create receipt" : "Payment made now — auto-create payment voucher"}</b></label><div id="pay_f"></div></div>`;
   openModal((ex ? "Edit " : "New ") + (isS ? "Sales Invoice" : "Purchase Bill"), body, "Save", saveDoc);
-  drawLines(); payDraw(); updTot();
+  drawHead(); drawLines(); payDraw(); updTot();
 }
 function payDraw() {
   const P0 = DR.pay, isS = DR.kind === "sales", vk = isS ? "receipts" : "payments";
@@ -575,7 +582,34 @@ function payHint() {
   const t = docCalc(DR.d).total, a = num(DR.pay.amount), rest = r2(t - a);
   h.innerHTML = a <= 0 ? "Enter the amount received." : Math.abs(rest) < 0.5 ? "✔ Full payment — invoice will be fully settled." : rest > 0 ? `Part payment — <b>${inr(rest)}</b> will remain due from the party.` : `<span class="cr">Amount is ${inr(-rest)} more than the invoice total.</span>`;
 }
+const partyFld = (label, selHtml, sid) => {
+  const ok = can("parties", 2);
+  return fld(label + (ok ? ` <a class="qpl" onclick="qpTog('${sid}')">+ New ${label.toLowerCase().includes("suppl") || label === "Paid to" ? "supplier" : "customer"}</a>` : ""), selHtml) + (ok ? `<div class="full" id="qp_${sid}" style="display:none"><div class="qpb"><h4>Quick add</h4><div class="grid">${fld("Name *", `<input id="qn_${sid}" placeholder="Customer / business name">`)}${fld("Phone (WhatsApp)", `<input id="qp_ph_${sid}" inputmode="tel">`)}${fld("GSTIN (optional)", `<input id="qg_${sid}" maxlength="15" style="text-transform:uppercase">`)}${fld("State", `<select id="qs_${sid}">${opts(STATES, S().state)}</select>`)}${fld("Address (optional)", `<textarea id="qa_${sid}" style="min-height:48px"></textarea>`, "full")}</div><div class="acts" style="margin-top:12px"><button class="btn pri sm" onclick="qpSave('${sid}')">Add &amp; select</button><button class="btn sm" onclick="qpTog('${sid}')">Cancel</button></div></div></div>` : "");
+};
+function qpTog(sid) { const b = $("qp_" + sid); b.style.display = b.style.display === "none" ? "block" : "none"; if (b.style.display === "block") { const n = $("qn_" + sid); n && n.focus(); } }
+function qpSave(sid) {
+  const name = val("qn_" + sid), g = val("qg_" + sid).toUpperCase();
+  if (!name) return toast("Enter a name");
+  if (g && !/^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/.test(g)) return toast("GSTIN format looks wrong");
+  let p = db.parties.find(x => x.name.trim().toLowerCase() === name.toLowerCase()), isNew = !p;
+  if (!p) { p = {id: uid(), name, gstin: g, state: val("qs_" + sid), phone: val("qp_ph_" + sid), email: "", address: val("qa_" + sid), openAmt: 0, openType: "Dr"}; db.parties.push(p); save(); }
+  const s = $(sid), bl = s.querySelector('option[value=""]');
+  s.innerHTML = opts(db.parties.map(x => [x.id, x.name]), p.id, bl ? bl.textContent : "");
+  s.value = p.id; s.dispatchEvent(new Event("change"));
+  const b = $("qp_" + sid); if (b) { b.style.display = "none"; ["qn_", "qp_ph_", "qg_", "qa_"].forEach(k => { const e = $(k + sid); if (e) e.value = ""; }); }
+  toast(isNew ? "Added & selected: " + name : "Already exists — selected " + name);
+}
 function docParty(id) { DR.d.partyId = id; DR.d.pos = (P(id) || {}).state || S().state; $("f_pos").value = DR.d.pos; updTot(); }
+function drawHead() { $("lh").innerHTML = "<tr>" + heads(["Item", "Description", "HSN/SAC", "Qty", DR.d.nog ? "Rate" : "Rate (excl. GST)", "Disc (₹)", "GST %", ["Amount", "r"], ""]) + "</tr>"; }
+function gstMode(on) {
+  const d = DR.d; d.nog = !on;
+  if (DR.isNew && d.no === DR.autoNo) { d.no = DR.autoNo = nextNo(DR.kind, !on); $("f_no").value = d.no; }
+  $("f_ser").textContent = on ? "· Filing series" : "· Non-filing series";
+  d.lines.forEach(l => { if (!on) { if (l.gst0 === undefined) l.gst0 = l.gst; l.gst = 0; } else if (l.gst0 !== undefined) { l.gst = l.gst0; delete l.gst0; } });
+  const g = $("f_gst").children; g[0].className = on ? "on" : ""; g[1].className = on ? "" : "on ng";
+  $("f_gnote").style.display = on ? "none" : "block";
+  drawHead(); drawLines(); updTot();
+}
 function drawLines() {
   const isS = DR.kind === "sales";
   $("lb").innerHTML = DR.d.lines.map((l, i) => `<tr>
@@ -585,13 +619,13 @@ function drawLines() {
    <td style="width:80px"><input type="number" step="any" value="${l.qty}" oninput="setL(${i},'qty',this.value)"></td>
    <td style="width:110px"><input type="number" step="any" value="${l.rate}" oninput="setL(${i},'rate',this.value)"></td>
    <td style="width:90px"><input type="number" step="any" value="${l.disc}" oninput="setL(${i},'disc',this.value)"></td>
-   <td style="width:84px"><select onchange="setL(${i},'gst',this.value)">${opts(GST_RATES.map(g => [g, g + "%"]), l.gst)}</select></td>
+   <td style="width:84px"><select onchange="setL(${i},'gst',this.value)" ${DR.d.nog ? "disabled" : ""}>${opts(GST_RATES.map(g => [g, g + "%"]), l.gst)}</select></td>
    <td class="r" style="width:110px;font-weight:700" id="la${i}">${inr(0)}</td>
    <td style="width:36px"><div class="x" onclick="delLine(${i})" style="width:30px;height:30px;font-size:17px">×</div></td></tr>`).join("");
 }
 function pickItem(i, id) {
   const l = DR.d.lines[i], it = db.items.find(x => x.id === id); l.itemId = id;
-  if (it) { l.desc = it.name; l.hsn = it.hsn; l.unit = it.unit; l.rate = DR.kind === "sales" ? it.saleRate : it.costRate; l.gst = it.gst; }
+  if (it) { l.desc = it.name; l.hsn = it.hsn; l.unit = it.unit; l.rate = DR.kind === "sales" ? it.saleRate : it.costRate; if (DR.d.nog) { l.gst0 = it.gst; l.gst = 0; } else l.gst = it.gst; }
   drawLines(); updTot();
 }
 function setL(i, f, v) { DR.d.lines[i][f] = f === "gst" ? +v : num(v); updTot(); }
@@ -600,8 +634,8 @@ function delLine(i) { if (DR.d.lines.length > 1) DR.d.lines.splice(i, 1); else D
 function updTot() {
   const c = docCalc(DR.d);
   c.lines.forEach((l, i) => { const e = $("la" + i); if (e) e.textContent = inr(l.amount); });
-  $("tot").innerHTML = `<div><span>Taxable value</span><span>${inr(c.taxable)}</span></div>` +
-    (c.intra ? `<div><span>CGST</span><span>${inr(c.cgst)}</span></div><div><span>SGST</span><span>${inr(c.sgst)}</span></div>` : `<div><span>IGST</span><span>${inr(c.igst)}</span></div>`) +
+  $("tot").innerHTML = `<div><span>${DR.d.nog ? "Amount" : "Taxable value"}</span><span>${inr(c.taxable)}</span></div>` +
+    (DR.d.nog ? "" : c.intra ? `<div><span>CGST</span><span>${inr(c.cgst)}</span></div><div><span>SGST</span><span>${inr(c.sgst)}</span></div>` : `<div><span>IGST</span><span>${inr(c.igst)}</span></div>`) +
     `<div><span>Round off</span><span>${inr(c.round)}</span></div><div class="g"><span>Total</span><span>${inr(c.total)}</span></div><div style="font-size:12px;color:var(--mut)">${words(c.total)} Rupees Only</div>`;
   if (DR.pay && DR.pay.on) { if (DR.pay.auto) { DR.pay.amount = c.total; const e = $("pay_amt"); if (e) e.value = c.total; } payHint(); }
 }
@@ -647,12 +681,12 @@ function logoPick(inp) {
 }
 function logoReset(mode) { if (mode === "none") S().logo = "none"; else delete S().logo; save(); $("logoPrev").src = S().logo === "none" ? "" : DEF_LOGO; $("logoPrev").style.display = S().logo === "none" ? "none" : "block"; toast(mode === "none" ? "Logo removed — name shows instead" : "Default logo restored"); }
 function paperHtml(kind, d) {
-  const isS = kind === "sales", c = docCalc(d), p = P(d.partyId) || {}, s = S(), al = allocAll().inv[d.id] || {total: c.total, paid: 0, due: c.total}, st = payStat(al);
-  return `<div class="paper bm"><div class="hd"><div>${brandHtml(s)}<div>${esc(s.address).replace(/\n/g, "<br>")}</div><div>${s.phone ? "Ph: " + esc(s.phone) : ""} ${s.email ? " · " + esc(s.email) : ""}</div><div>${s.gstin ? "<b>GSTIN:</b> " + esc(s.gstin) : ""} ${s.pan ? " · <b>PAN:</b> " + esc(s.pan) : ""}</div></div><div><div class="ttl">${isS ? "TAX INVOICE" : "PURCHASE BILL"}</div><div style="text-align:right"><span class="stp" style="color:${st === "Paid" ? "#1a7f37" : st === "Part paid" ? "#b45309" : "#b91c1c"}">${st.toUpperCase()}</span></div><div style="text-align:right;margin-top:8px"><b>No:</b> ${esc(d.no)}<br><b>Date:</b> ${fdate(d.date)}${d.billNo ? `<br><b>Supplier Bill:</b> ${esc(d.billNo)}` : ""}</div></div></div>
-  <div class="meta"><div class="box"><h5>${isS ? "Bill To" : "Supplier"}</h5><b>${esc(p.name)}</b><br>${esc(p.address || "").replace(/\n/g, "<br>")}${p.gstin ? "<br>GSTIN: " + esc(p.gstin) : ""}${p.phone ? "<br>Ph: " + esc(p.phone) : ""}</div><div class="box"><h5>Place of Supply</h5><b>${esc(d.pos)}</b><br>${c.intra ? "Intra-state (CGST + SGST)" : "Inter-state (IGST)"}</div></div>
-  <table><thead><tr><th>#</th><th style="text-align:left">Description</th><th>HSN/SAC</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Disc (₹)</th><th class="r">Taxable</th><th class="r">GST%</th><th class="r">Amount</th></tr></thead><tbody>${c.lines.map((l, i) => `<tr><td>${i + 1}</td><td>${esc(l.desc)}</td><td>${esc(l.hsn)}</td><td class="r">${l.qty}${l.unit ? " " + esc(l.unit) : ""}</td><td class="r">${inr(l.rate)}</td><td class="r">${l.discAmt ? inr(l.discAmt) : "—"}</td><td class="r">${inr(l.taxable)}</td><td class="r">${l.gst}%</td><td class="r">${inr(l.amount)}</td></tr>`).join("")}</tbody></table>
+  const isS = kind === "sales", ng = !!d.nog, c = docCalc(d), p = P(d.partyId) || {}, s = S(), al = allocAll().inv[d.id] || {total: c.total, paid: 0, due: c.total}, st = payStat(al);
+  return `<div class="paper bm"><div class="hd"><div>${brandHtml(s)}<div>${esc(s.address).replace(/\n/g, "<br>")}</div><div>${s.phone ? "Ph: " + esc(s.phone) : ""} ${s.email ? " · " + esc(s.email) : ""}</div><div>${s.gstin && !ng ? "<b>GSTIN:</b> " + esc(s.gstin) : ""} ${s.pan ? (s.gstin && !ng ? " · " : "") + "<b>PAN:</b> " + esc(s.pan) : ""}</div></div><div><div class="ttl">${isS ? (ng ? "BILL OF SUPPLY" : "TAX INVOICE") : "PURCHASE BILL"}</div><div style="text-align:right"><span class="stp" style="color:${st === "Paid" ? "#1a7f37" : st === "Part paid" ? "#b45309" : "#b91c1c"}">${st.toUpperCase()}</span></div><div style="text-align:right;margin-top:8px"><b>No:</b> ${esc(d.no)}<br><b>Date:</b> ${fdate(d.date)}${d.billNo ? `<br><b>Supplier Bill:</b> ${esc(d.billNo)}` : ""}</div></div></div>
+  <div class="meta"><div class="box"><h5>${isS ? "Bill To" : "Supplier"}</h5><b>${esc(p.name)}</b><br>${esc(p.address || "").replace(/\n/g, "<br>")}${p.gstin ? "<br>GSTIN: " + esc(p.gstin) : ""}${p.phone ? "<br>Ph: " + esc(p.phone) : ""}</div><div class="box"><h5>Place of Supply</h5><b>${esc(d.pos)}</b><br>${ng ? "No GST charged" : c.intra ? "Intra-state (CGST + SGST)" : "Inter-state (IGST)"}</div></div>
+  <table><thead><tr>${ng ? `<th>#</th><th style="text-align:left">Description</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Disc (₹)</th><th class="r">Amount</th>` : `<th>#</th><th style="text-align:left">Description</th><th>HSN/SAC</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Disc (₹)</th><th class="r">Taxable</th><th class="r">GST%</th><th class="r">Amount</th>`}</tr></thead><tbody>${c.lines.map((l, i) => ng ? `<tr><td>${i + 1}</td><td>${esc(l.desc)}</td><td class="r">${l.qty}${l.unit ? " " + esc(l.unit) : ""}</td><td class="r">${inr(l.rate)}</td><td class="r">${l.discAmt ? inr(l.discAmt) : "—"}</td><td class="r">${inr(l.amount)}</td></tr>` : `<tr><td>${i + 1}</td><td>${esc(l.desc)}</td><td>${esc(l.hsn)}</td><td class="r">${l.qty}${l.unit ? " " + esc(l.unit) : ""}</td><td class="r">${inr(l.rate)}</td><td class="r">${l.discAmt ? inr(l.discAmt) : "—"}</td><td class="r">${inr(l.taxable)}</td><td class="r">${l.gst}%</td><td class="r">${inr(l.amount)}</td></tr>`).join("")}</tbody></table>
   <div class="sum"><div style="flex:1"><b>Amount in words:</b><br>${words(c.total)} Rupees Only${d.notes ? `<br><br><b>Notes:</b><br>${esc(d.notes).replace(/\n/g, "<br>")}` : ""}${isS && (s.bank || s.upi) ? `<br><br><b>Bank details</b><br>${esc(s.bank)} ${s.acc ? "· A/c " + esc(s.acc) : ""} ${s.ifsc ? "· IFSC " + esc(s.ifsc) : ""}${s.upi ? "<br>UPI: " + esc(s.upi) : ""}` : ""}${isS && s.terms ? `<br><br><b>Terms</b><br>${esc(s.terms).replace(/\n/g, "<br>")}` : ""}${isS ? upiQr(al.due, d.no) : ""}</div>
-  <div class="t"><div><span>Taxable value</span><span>${inr(c.taxable)}</span></div>${c.intra ? `<div><span>CGST</span><span>${inr(c.cgst)}</span></div><div><span>SGST</span><span>${inr(c.sgst)}</span></div>` : `<div><span>IGST</span><span>${inr(c.igst)}</span></div>`}<div><span>Round off</span><span>${inr(c.round)}</span></div><div class="g"><span>Total</span><span>${inr(c.total)}</span></div>${al.paid > 0.5 ? `<div><span>Received</span><span>${inr(al.paid)}</span></div><div class="g"><span>Balance due</span><span>${inr(al.due)}</span></div>` : ""}<p style="margin-top:34px;text-align:right">For <b>${esc(s.bizName)}</b><br><br>Authorised Signatory</p></div></div>
+  <div class="t"><div><span>${ng ? "Amount" : "Taxable value"}</span><span>${inr(c.taxable)}</span></div>${ng ? "" : c.intra ? `<div><span>CGST</span><span>${inr(c.cgst)}</span></div><div><span>SGST</span><span>${inr(c.sgst)}</span></div>` : `<div><span>IGST</span><span>${inr(c.igst)}</span></div>`}<div><span>Round off</span><span>${inr(c.round)}</span></div><div class="g"><span>Total</span><span>${inr(c.total)}</span></div>${al.paid > 0.5 ? `<div><span>Received</span><span>${inr(al.paid)}</span></div><div class="g"><span>Balance due</span><span>${inr(al.due)}</span></div>` : ""}<p style="margin-top:34px;text-align:right">For <b>${esc(s.bizName)}</b><br><br>Authorised Signatory</p></div></div>
   <div class="pf">Powered by ${FOOTER_BRAND}</div></div>`;
 }
 function printHtml(html) { $("print").innerHTML = html; window.print(); }
@@ -819,7 +853,7 @@ function vouchForm(kind, id) {
   const d = ex ? Object.assign({}, ex) : {id: uid(), no: nextVNo(kind), date: defDate(), partyId: "", amount: "", mode: "Cash", ref: "", note: ""};
   openModal((ex ? "Edit " : "New ") + (isR ? "Receipt" : "Payment"), `<div class="grid">
    ${fld("Voucher No.", `<input id="v_no" value="${esc(d.no)}">`)}${fld("Date", `<input type="date" id="v_date" value="${d.date}">`)}
-   ${fld(isR ? "Received from" : "Paid to", `<select id="v_party" onchange="vBal()">${opts(db.parties.map(p => [p.id, p.name]), d.partyId, "Select party…")}</select>`)}
+   ${partyFld(isR ? "Received from" : "Paid to", `<select id="v_party" onchange="vBal()">${opts(db.parties.map(p => [p.id, p.name]), d.partyId, "Select party…")}</select>`, "v_party")}
    ${fld("Amount (₹)", `<input type="number" step="any" id="v_amt" value="${d.amount}">`)}
    ${fld("Mode", `<select id="v_mode">${opts(MODES, d.mode)}</select>`)}${fld("Reference / Txn ID", `<input id="v_ref" value="${esc(d.ref)}">`)}
    ${fld("Note", `<input id="v_note" value="${esc(d.note)}">`, "full")}</div><p class="note" id="v_bal" style="margin-top:12px"></p>`, "Save", () => {
@@ -1038,8 +1072,8 @@ function rangeBar(extra) {
 }
 function gstTable(tab) {
   const r = range();
-  const S_ = db.sales.filter(d => inR(d.date, r.from, r.to)).sort((a, b) => a.date.localeCompare(b.date));
-  const P_ = db.purchases.filter(d => inR(d.date, r.from, r.to)).sort((a, b) => a.date.localeCompare(b.date));
+  const S_ = db.sales.filter(d => !d.nog && inR(d.date, r.from, r.to)).sort((a, b) => a.date.localeCompare(b.date));
+  const P_ = db.purchases.filter(d => !d.nog && inR(d.date, r.from, r.to)).sort((a, b) => a.date.localeCompare(b.date));
   const reg = (arr, isS) => {
     const rows = arr.map(d => { const c = docCalc(d), p = P(d.partyId) || {}; return [fdate(d.date), d.no + (d.billNo ? " / " + d.billNo : ""), p.name, p.gstin || "", d.pos, c.taxable, c.cgst, c.sgst, c.igst, c.total]; });
     const tot = ["", "", "TOTAL", "", "", ...[5, 6, 7, 8, 9].map(i => r2(sum(rows, x => x[i])))];
@@ -1177,12 +1211,12 @@ PAGES.settings = () => {
     title: "Settings", sub: "Business details printed on every invoice", noFy: true, actions: btn("Save settings", "saveSettings()", true),
     body: `<div class="panel"><h3>Business</h3><div class="grid">${fld("Business name", `<input id="s_biz" value="${esc(s.bizName)}">`)}${fld("GSTIN", `<input id="s_gstin" value="${esc(s.gstin)}" style="text-transform:uppercase">`)}${fld("PAN", `<input id="s_pan" value="${esc(s.pan)}">`)}${fld("State (for CGST/SGST vs IGST)", `<select id="s_state">${opts(STATES, s.state)}</select>`)}${fld("Phone", `<input id="s_phone" value="${esc(s.phone)}">`)}${fld("Email", `<input id="s_email" value="${esc(s.email)}">`)}${fld("Address", `<textarea id="s_addr">${esc(s.address)}</textarea>`, "full")}${fld("App theme", `<select id="s_theme">${opts([["blood", "Blood Moon (red & black)"], ["classic", "Classic dark"]], s.theme === "classic" ? "classic" : "blood")}</select>`)}${fld("Invoice logo", `<div style="background:#0d0d10;border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><img id="logoPrev" src="${s.logo === "none" ? "" : (s.logo || DEF_LOGO)}" style="height:44px;width:auto;${s.logo === "none" ? "display:none" : ""}"><input type="file" accept="image/*" onchange="logoPick(this)" style="max-width:240px"><a class="btn" onclick="logoReset()">Use default</a><a class="btn" onclick="logoReset('none')">Remove</a></div><p class="note" style="margin-top:6px">Shown on invoices, bills and receipts. Use a logo that looks good on a dark red background (white or transparent).</p>`, "full")}</div></div>
     <div class="panel"><h3>Bank & terms</h3><div class="grid">${fld("Bank name", `<input id="s_bank" value="${esc(s.bank)}">`)}${fld("Account number", `<input id="s_acc" value="${esc(s.acc)}">`)}${fld("IFSC", `<input id="s_ifsc" value="${esc(s.ifsc)}">`)}${fld("UPI ID", `<input id="s_upi" value="${esc(s.upi)}">`)}${fld("Invoice terms", `<textarea id="s_terms">${esc(s.terms)}</textarea>`, "full")}</div></div>
-    <div class="panel"><h3>Accounts</h3><div class="grid">${fld("Sales prefix", `<input id="s_sp" value="${esc(s.salePrefix)}">`)}${fld("Purchase prefix", `<input id="s_pp" value="${esc(s.purchPrefix)}">`)}${fld("Opening cash & bank balance (₹)", `<input type="number" step="any" id="s_oc" value="${s.openingCash}">`)}${fld("…of which held in bank/UPI (₹)", `<input type="number" step="any" id="s_ob" value="${s.openingBank || 0}">`)}${fld("UPI QR on unpaid invoices", `<select id="s_qr">${opts([["yes", "Show (needs UPI ID above)"], ["no", "Hide"]], s.qrOn === false ? "no" : "yes")}</select>`)}${fld("Lock PIN (leave empty for none)", `<input type="password" id="s_pin" value="${esc(s.pin)}" maxlength="8" autocomplete="new-password">`)}</div><p class="note" style="margin-top:12px">The PIN only hides the screen on a shared computer — it is not encryption.</p></div>${usersPanel()}${tplPanel()}${ghPanel()}`
+    <div class="panel"><h3>Accounts</h3><div class="grid">${fld("Sales prefix", `<input id="s_sp" value="${esc(s.salePrefix)}">`)}${fld("Purchase prefix", `<input id="s_pp" value="${esc(s.purchPrefix)}">`)}${fld("Non-filing sales prefix", `<input id="s_nfs" value="${esc(s.nfSalePrefix || "NF")}">`)}${fld("Non-filing purchase prefix", `<input id="s_nfp" value="${esc(s.nfPurchPrefix || "NFP")}">`)}${fld("Opening cash & bank balance (₹)", `<input type="number" step="any" id="s_oc" value="${s.openingCash}">`)}${fld("…of which held in bank/UPI (₹)", `<input type="number" step="any" id="s_ob" value="${s.openingBank || 0}">`)}${fld("UPI QR on unpaid invoices", `<select id="s_qr">${opts([["yes", "Show (needs UPI ID above)"], ["no", "Hide"]], s.qrOn === false ? "no" : "yes")}</select>`)}${fld("Lock PIN (leave empty for none)", `<input type="password" id="s_pin" value="${esc(s.pin)}" maxlength="8" autocomplete="new-password">`)}</div><p class="note" style="margin-top:12px">The PIN only hides the screen on a shared computer — it is not encryption.</p></div>${usersPanel()}${tplPanel()}${ghPanel()}`
   };
 };
 function saveSettings() {
   if (!ck("__owner", 1)) return;
-  Object.assign(S(), {bizName: val("s_biz") || CLIENT_NAME, gstin: val("s_gstin").toUpperCase(), pan: val("s_pan").toUpperCase(), state: val("s_state"), phone: val("s_phone"), email: val("s_email"), address: val("s_addr"), bank: val("s_bank"), acc: val("s_acc"), ifsc: val("s_ifsc"), upi: val("s_upi"), terms: val("s_terms"), salePrefix: val("s_sp") || "INV", purchPrefix: val("s_pp") || "PUR", openingCash: num(val("s_oc")), pin: val("s_pin"), tplInvoice: val("s_ti"), tplReceipt: val("s_tr"), tplPayment: val("s_tp"), tplReminder: val("s_trm"), openingBank: num(val("s_ob")), qrOn: val("s_qr") !== "no", theme: val("s_theme") === "classic" ? "classic" : "blood"});
+  Object.assign(S(), {bizName: val("s_biz") || CLIENT_NAME, gstin: val("s_gstin").toUpperCase(), pan: val("s_pan").toUpperCase(), state: val("s_state"), phone: val("s_phone"), email: val("s_email"), address: val("s_addr"), bank: val("s_bank"), acc: val("s_acc"), ifsc: val("s_ifsc"), upi: val("s_upi"), terms: val("s_terms"), salePrefix: val("s_sp") || "INV", purchPrefix: val("s_pp") || "PUR", nfSalePrefix: val("s_nfs") || "NF", nfPurchPrefix: val("s_nfp") || "NFP", openingCash: num(val("s_oc")), pin: val("s_pin"), tplInvoice: val("s_ti"), tplReceipt: val("s_tr"), tplPayment: val("s_tp"), tplReminder: val("s_trm"), openingBank: num(val("s_ob")), qrOn: val("s_qr") !== "no", theme: val("s_theme") === "classic" ? "classic" : "blood"});
   save(); render(); toast("Settings saved");
 }
 
@@ -1912,7 +1946,7 @@ function baRender() {
   const used = sum(BA.rows, r => num(r.amount)), left = r2(BA.amt - used);
   if (T === "sale" || T === "purchase") {
     const due = BA.partyId ? bkDue(BA.partyId, T) : [];
-    mid = `<div class="grid">${fld(T === "sale" ? "Received from" : "Paid to", `<select id="ba_party" onchange="baDo('party')">${opts(db.parties.map(p => [p.id, p.name]), BA.partyId, "Select party…")}</select>`)}${fld("Mode", `<select id="ba_mode">${opts(BANK_MODES, BA.mode)}</select>`)}</div>
+    mid = `<div class="grid">${partyFld(T === "sale" ? "Received from" : "Paid to", `<select id="ba_party" onchange="baDo('party')">${opts(db.parties.map(p => [p.id, p.name]), BA.partyId, "Select party…")}</select>`, "ba_party")}${fld("Mode", `<select id="ba_mode">${opts(BANK_MODES, BA.mode)}</select>`)}</div>
     <div style="margin-top:14px"><label>${T === "sale" ? "Against invoice(s)" : "Against bill(s)"} — split the amount if needed</label>${BA.rows.map((r, i) => `<div style="display:flex;gap:8px;margin-top:8px;align-items:center"><select id="ba_inv${i}" onchange="baDo('inv',${i},this.value)" style="flex:1"><option value="">On account / advance</option>${due.map(x => `<option value="${x.d.id}" ${x.d.id === r.ref ? "selected" : ""}>${esc(x.d.no)} · ${fdate(x.d.date)} · due ${inr(x.due)}</option>`).join("")}</select><input type="number" step="any" id="ba_amt${i}" value="${r.amount}" style="width:130px" oninput="baSync();baRem()"><a style="cursor:pointer;padding:0 6px" onclick="baDo('del',${i})">✕</a></div>`).join("")}</div>
     <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:13px"><a style="cursor:pointer" onclick="baDo('add')">+ Split to another invoice</a><span id="ba_left" class="note"></span></div>`;
   } else if (T === "expense") {
