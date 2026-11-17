@@ -266,7 +266,7 @@ const ICON = {
 };
 const svg = k => `<svg viewBox="0 0 24 24">${ICON[k]}</svg>`;
 const NAV = [
- ["WORKSPACE",[["dashboard","Dashboard","dash"],["sales","Sales","sales"],["purchases","Purchases","purch"],["receipts","Receipts","rec"],["payments","Payments","pay"],["entries","Expenses & Others","exp"],["parties","Parties","users"],["items","Items","box"]]],
+ ["WORKSPACE",[["dashboard","Dashboard","dash"],["sales","Sales","sales"],["quotes","Quotations","book"],["purchases","Purchases","purch"],["receipts","Receipts","rec"],["payments","Payments","pay"],["entries","Expenses & Others","exp"],["parties","Parties","users"],["items","Items","box"]]],
  ["REPORTS",[["outstanding","Outstanding","clock"],["cashbook","Cash Book","book"],["gst","GST Reports","gst"],["pnl","Profit & Loss","pl"],["bs","Balance Sheet","bs"]]],
  ["DATA",[["backup","Import / Backup","db"],["settings","Settings","set"],["__lock","Lock","lock"]]]
 ];
@@ -314,7 +314,7 @@ function defaults() {
       {id: "p_cash_c", name: "Cash Customer", gstin: "", state: "", phone: "", email: "", address: "", openType: "Dr", openAmt: 0},
       {id: "p_cash_s", name: "Cash Supplier", gstin: "", state: "", phone: "", email: "", address: "", openType: "Dr", openAmt: 0}
     ],
-    items: [], sales: [], purchases: [], receipts: [], payments: [], entries: [], users: [], bank: {accts: ["Main account"], lines: [], rules: [], close: {}}
+    items: [], sales: [], purchases: [], receipts: [], payments: [], entries: [], quotes: [], users: [], bank: {accts: ["Main account"], lines: [], rules: [], close: {}}
   };
 }
 function load() {
@@ -622,7 +622,7 @@ function drawLines() {
 }
 function pickItem(i, id) {
   const l = DR.d.lines[i], it = db.items.find(x => x.id === id); l.itemId = id;
-  if (it) { l.desc = it.name; l.hsn = it.hsn; l.unit = it.unit; l.rate = DR.kind === "sales" ? it.saleRate : it.costRate; l.gst = it.gst; }
+  if (it) { l.desc = it.name; l.hsn = it.hsn; l.unit = it.unit; l.rate = DR.kind !== "purchases" ? it.saleRate : it.costRate; l.gst = it.gst; }
   drawLines(); updTot();
 }
 function setL(i, f, v) { DR.d.lines[i][f] = f === "gst" ? +v : num(v); updTot(); }
@@ -688,14 +688,14 @@ function paperHtml(kind, d) {
 }
 function printHtml(html) { $("print").innerHTML = html; window.print(); }
 let PDFC = {}, PNGC = {};
-function docHtml(kind, d) { return kind === "sales" || kind === "purchases" ? paperHtml(kind, d) : voucherHtml(kind, d); }
+function docHtml(kind, d) { return kind === "quotes" ? quotePaper(d) : kind === "sales" || kind === "purchases" ? paperHtml(kind, d) : voucherHtml(kind, d); }
 async function docModal(kind, id) {
   await ensureQr();
   const d = db[kind].find(x => x.id === id); if (!d) return;
-  const canWa = kind !== "purchases", isDoc = kind === "sales" || kind === "purchases", p = P(d.partyId) || {};
-  const title = ({sales: "Invoice ", purchases: "Bill ", receipts: "Receipt ", payments: "Payment voucher "})[kind] + esc(d.no);
+  const canWa = kind !== "purchases", isDoc = kind === "sales" || kind === "purchases" || kind === "quotes", p = P(d.partyId) || {};
+  const title = ({sales: "Invoice ", quotes: "Quotation ", purchases: "Bill ", receipts: "Receipt ", payments: "Payment voucher "})[kind] + esc(d.no);
   const msg = canWa ? `<div style="margin-top:16px"><label>WhatsApp message (edit if needed)</label><textarea id="wa_msg" rows="9">${esc(waMsg(kind, d))}</textarea><p class="note" style="margin-top:8px">To: <b>${esc(p.name || "")}</b> ${p.phone ? "· " + esc(p.phone) : "· no phone saved — add one under Parties to open their chat directly"}</p></div><div id="wa_steps"></div>` : "";
-  const edit = isDoc ? `docForm('${kind}','${id}')` : `vouchForm('${kind}','${id}')`;
+  const edit = kind === "quotes" ? `quoteForm('${id}')` : isDoc ? `docForm('${kind}','${id}')` : `vouchForm('${kind}','${id}')`;
   openModal(title, docHtml(kind, d) + msg, null, null,
     `<button class="btn" onclick="${edit}">Edit</button><button class="btn" onclick="pdfDownload('${kind}','${id}')">Download PDF</button><button class="btn" onclick="printDoc('${kind}','${id}')">Print</button>` +
     (canWa ? `<button class="btn" onclick="waChat('${kind}','${id}')">Open customer's chat</button><button class="btn pri" id="wa_btn" onclick="waShare('${kind}','${id}')">Send on WhatsApp</button>` : ""));
@@ -711,16 +711,17 @@ function waLink(phone, text) {
 const DEF_TPL = {
   invoice: "Hello {party},\n\nThank you for your business with {business}. Please find your invoice attached.\n\nInvoice No: {no}\nDate: {date}\nAmount: {amount}\nOutstanding balance: {balance}\n\nFor any queries, call {phone}.\n\n- {business}",
   receipt: "Hello {party},\n\nWe have received {amount} on {date} by {mode}. Please find your receipt {no} attached.\n\nOutstanding balance: {balance}\n\nThank you.\n- {business}",
+  quote: "Hello {party},\n\nThank you for your interest in {business}. Please find our quotation attached.\n\nQuotation No: {no}\nDate: {date}\nAmount: {amount}\nValid till: {valid}\n\nFor any queries, call {phone}.\n\n- {business}",
   payment: "Hello {party},\n\nWe have paid {amount} on {date} by {mode} (voucher {no}). Please find the payment voucher attached.\n\nThank you.\n- {business}"
 };
 const fillTpl = (t, v) => t.replace(/\{(\w+)\}/g, (m, k) => v[k] != null ? v[k] : m);
 DEF_TPL.reminder = "Hello {party},\n\nThis is a gentle reminder from {business}. Your outstanding balance is {balance}.\n\n{list}\n\nKindly make the payment at your earliest convenience.{upi}\n\nThank you.\n- {business}\nFor queries call {phone}";
 function balText(pid) { const b = pBal(pid); return b > 0.5 ? inr(b) + " due" : b < -0.5 ? inr(-b) + " advance" : "Nil"; }
 function waMsg(kind, d) {
-  const p = P(d.partyId) || {}, s = S(), key = kind === "receipts" ? "receipt" : kind === "payments" ? "payment" : "invoice";
+  const p = P(d.partyId) || {}, s = S(), key = kind === "receipts" ? "receipt" : kind === "payments" ? "payment" : kind === "quotes" ? "quote" : "invoice";
   const tpl = s["tpl" + key[0].toUpperCase() + key.slice(1)] || DEF_TPL[key];
-  const amt = kind === "sales" || kind === "purchases" ? docCalc(d).total : num(d.amount);
-  return fillTpl(tpl, {party: p.name || "", business: s.bizName, no: d.no, date: fdate(d.date), amount: inr(amt), mode: d.mode || "", balance: balText(d.partyId), phone: s.phone || "your shop", upi: s.upi || ""});
+  const amt = kind === "sales" || kind === "purchases" || kind === "quotes" ? docCalc(d).total : num(d.amount);
+  return fillTpl(tpl, {party: p.name || "", business: s.bizName, no: d.no, date: fdate(d.date), amount: inr(amt), mode: d.mode || "", balance: balText(d.partyId), phone: s.phone || "your shop", upi: s.upi || "", valid: d.validTill ? fdate(d.validTill) : ""});
 }
 function voucherHtml(kind, d) {
   const isR = kind === "receipts", p = P(d.partyId) || {}, s = S(), bal = pBal(d.partyId, d.date);
@@ -776,10 +777,19 @@ function getPng(kind, id) {
   if (!PNGC[key]) PNGC[key] = (async () => { await ensureQr(); return makePng(docHtml(kind, db[kind].find(x => x.id === id))); })();
   return PNGC[key];
 }
-function copyImg(kind, id) {
-  if (!(navigator.clipboard && window.ClipboardItem)) return Promise.resolve(false);
-  return navigator.clipboard.write([new ClipboardItem({"image/png": getPng(kind, id)})]).then(() => true, () => false);
+let COPYERR = "";
+async function copyImg(kind, id) {
+  COPYERR = "";
+  if (!window.isSecureContext) { COPYERR = "the page is not opened over https"; return false; }
+  if (!(navigator.clipboard && window.ClipboardItem)) { COPYERR = "this browser cannot copy images (use Chrome or Edge)"; return false; }
+  const pr = getPng(kind, id);
+  try { await navigator.clipboard.write([new ClipboardItem({"image/png": pr})]); return true; }
+  catch (e1) {
+    try { const b = await pr; await navigator.clipboard.write([new ClipboardItem({"image/png": b})]); return true; }
+    catch (e2) { COPYERR = ((e2 && e2.name) || "blocked") + (e2 && e2.message ? " — " + e2.message : ""); return false; }
+  }
 }
+const copyToast = ok => toast(ok ? "Invoice image copied — press Ctrl+V in the chat" : "Not copied: " + COPYERR + ". Right-click the preview and choose Copy image");
 function saveBlob(blob, name) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
 }
@@ -814,18 +824,90 @@ async function waShare(kind, id, forceChat) {
   openWaChat(p.phone, msg);
   const box = $("wa_steps"); if (!box) return toast("PDF downloaded — attach it in the WhatsApp chat");
   const url = URL.createObjectURL(f);
+  let pngUrl = ""; try { pngUrl = URL.createObjectURL(await getPng(kind, id)); } catch (e) {}
   box.innerHTML = `<div class="panel" style="margin-top:14px;padding:16px"><h3 style="margin-bottom:10px">WhatsApp is open — 2 quick steps</h3>
-  <p class="note">${imgOk ? "✔ Invoice image copied to clipboard" : "✖ Could not copy the image (browser blocked it) — use the PDF below"}<br>✔ PDF also saved to Downloads: <b>${esc(f.name)}</b><br>✔ Chat opened for <b>${esc(p.name || "")}</b>${p.phone ? " (" + esc(p.phone) + ")" : " — no number saved, pick the contact"} with the message filled in.</p>
+  <p class="note">${imgOk ? "✔ Image copied to clipboard" : "✖ Image not copied — " + esc(COPYERR) + ". Right-click the preview below and choose <b>Copy image</b>, or use the PDF."}<br>✔ PDF also saved to Downloads: <b>${esc(f.name)}</b><br>✔ Chat opened for <b>${esc(p.name || "")}</b>${p.phone ? " (" + esc(p.phone) + ")" : " — no number saved, pick the contact"} with the message filled in.</p>
   <p style="margin:12px 0 8px"><b>1.</b> In the chat press <b>Enter</b> to send the message.<br><b>2.</b> ${imgOk ? "Click the message box, press <b>Ctrl+V</b> to paste the invoice, then <b>Enter</b>." : "Click the 📎 → Document → choose the PDF (or drag the chip below)."}</p>
+  ${pngUrl ? `<div style="margin:10px 0"><img src="${pngUrl}" alt="Invoice preview" style="max-width:240px;border:1px solid var(--line);border-radius:8px;display:block"><small style="color:var(--mut)">Right-click the image → Copy image</small></div>` : ""}
   <div draggable="true" id="wa_chip" style="display:inline-flex;gap:8px;align-items:center;padding:9px 14px;border:1px dashed var(--line);border-radius:12px;cursor:grab">📄 ${esc(f.name)} <small style="color:var(--mut)">drag into chat to send as PDF</small></div>
-  <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="copyImg('${kind}','${id}').then(ok => toast(ok ? 'Invoice image copied — press Ctrl+V in the chat' : 'Copy blocked by the browser'))">Copy invoice image again</button><button class="btn" onclick="openWaChat('${esc(p.phone || "")}', $('wa_msg').value)">Re-open chat</button><button class="btn" onclick="navigator.clipboard.writeText($('wa_msg').value).then(()=>toast('Message copied'))">Copy message</button></div></div>`;
+  <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn" onclick="copyImg('${kind}','${id}').then(copyToast)">Copy invoice image</button><button class="btn" onclick="pdfDownload('${kind}','${id}')">Download PDF</button><button class="btn" onclick="openWaChat('${esc(p.phone || "")}', $('wa_msg').value)">Re-open chat</button><button class="btn" onclick="navigator.clipboard.writeText($('wa_msg').value).then(()=>toast('Message copied'))">Copy message</button></div></div>`;
   $("wa_chip").addEventListener("dragstart", e => e.dataTransfer.setData("DownloadURL", "application/pdf:" + f.name + ":" + url));
   box.scrollIntoView({behavior: "smooth", block: "nearest"});
 }
 const waChat = (kind, id) => waShare(kind, id, true);
+/* ---- quotations ---- */
+const DEF_QT = "Prices are valid until the date shown above.\nTaxes extra as applicable unless stated.\nDelivery and payment terms to be confirmed on order.";
+const QSTAT = ["Draft", "Sent", "Accepted", "Rejected", "Expired"];
+const addDays = (iso, n) => { const t = new Date(iso + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+const qStat = d => ((d.status || "Draft") === "Draft" || d.status === "Sent") && d.validTill && d.validTill < today() ? "Expired" : (d.status || "Draft");
+function nextQNo() {
+  const [a, b] = fyRange(), pre = S().quotePrefix || "QTN", tag = fyLabel(fy), used = new Set(db.quotes.map(d => d.no));
+  let n = db.quotes.filter(d => inR(d.date, a, b)).length + 1, no;
+  do { no = `${pre}/${tag}/${pad(n, 4)}`; n++; } while (used.has(no));
+  return no;
+}
+function quotePaper(d) {
+  const c = docCalc(d), p = P(d.partyId) || {}, s = S(), st = qStat(d);
+  const sc = st === "Accepted" ? "#1a7f37" : st === "Rejected" || st === "Expired" ? "#b91c1c" : "#b45309";
+  return `<div class="paper bm"><div class="hd"><div>${brandHtml(s)}<div>${esc(s.address).replace(/\n/g, "<br>")}</div><div>${s.phone ? "Ph: " + esc(s.phone) : ""} ${s.email ? " · " + esc(s.email) : ""}</div><div>${s.gstin ? "<b>GSTIN:</b> " + esc(s.gstin) : ""} ${s.pan ? " · <b>PAN:</b> " + esc(s.pan) : ""}</div></div><div><div class="ttl">QUOTATION</div>${st === "Accepted" || st === "Rejected" || st === "Expired" ? `<div style="text-align:right"><span class="stp" style="color:${sc}">${st.toUpperCase()}</span></div>` : ""}<div style="text-align:right;margin-top:8px"><b>No:</b> ${esc(d.no)}<br><b>Date:</b> ${fdate(d.date)}${d.validTill ? `<br><b>Valid till:</b> ${fdate(d.validTill)}` : ""}</div></div></div>
+  <div class="meta"><div class="box"><h5>Quotation for</h5><b>${esc(p.name)}</b><br>${esc(p.address || "").replace(/\n/g, "<br>")}${p.gstin ? "<br>GSTIN: " + esc(p.gstin) : ""}${p.phone ? "<br>Ph: " + esc(p.phone) : ""}</div><div class="box"><h5>Place of Supply</h5><b>${esc(d.pos)}</b><br>${c.intra ? "Intra-state (CGST + SGST)" : "Inter-state (IGST)"}</div></div>
+  <table><thead><tr><th>#</th><th style="text-align:left">Description</th><th>HSN/SAC</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Disc (₹)</th><th class="r">Taxable</th><th class="r">GST%</th><th class="r">Amount</th></tr></thead><tbody>${c.lines.map((l, i) => `<tr><td>${i + 1}</td><td>${esc(l.desc)}</td><td>${esc(l.hsn)}</td><td class="r">${l.qty}${l.unit ? " " + esc(l.unit) : ""}</td><td class="r">${inr(l.rate)}</td><td class="r">${l.discAmt ? inr(l.discAmt) : "—"}</td><td class="r">${inr(l.taxable)}</td><td class="r">${l.gst}%</td><td class="r">${inr(l.amount)}</td></tr>`).join("")}</tbody></table>
+  <div class="sum"><div style="flex:1"><b>Amount in words:</b><br>${words(c.total)} Rupees Only${d.notes ? `<br><br><b>Notes:</b><br>${esc(d.notes).replace(/\n/g, "<br>")}` : ""}${d.terms ? `<br><br><b>Terms</b><br>${esc(d.terms).replace(/\n/g, "<br>")}` : ""}${s.bank || s.upi ? `<br><br><b>Bank details</b><br>${esc(s.bank)} ${s.acc ? "· A/c " + esc(s.acc) : ""} ${s.ifsc ? "· IFSC " + esc(s.ifsc) : ""}${s.upi ? "<br>UPI: " + esc(s.upi) : ""}` : ""}<br><br><i>This is a quotation, not a tax invoice.</i></div>
+  <div class="t"><div><span>Taxable value</span><span>${inr(c.taxable)}</span></div>${c.intra ? `<div><span>CGST</span><span>${inr(c.cgst)}</span></div><div><span>SGST</span><span>${inr(c.sgst)}</span></div>` : `<div><span>IGST</span><span>${inr(c.igst)}</span></div>`}<div><span>Round off</span><span>${inr(c.round)}</span></div><div class="g"><span>Total</span><span>${inr(c.total)}</span></div><p style="margin-top:34px;text-align:right">For <b>${esc(s.bizName)}</b><br><br>Authorised Signatory</p></div></div>
+  <div class="pf">Powered by ${FOOTER_BRAND}</div></div>`;
+}
+function quoteForm(id) {
+  if (!ck("sales", 2)) return;
+  const ex = id && db.quotes.find(x => x.id === id), dd = defDate();
+  DR = {kind: "quotes", isNew: !ex, d: ex ? JSON.parse(JSON.stringify(ex)) : {id: uid(), no: nextQNo(), date: dd, validTill: addDays(dd, S().quoteDays || 15), partyId: "p_cash_c", pos: "", lines: [blankLine()], notes: "", terms: S().quoteTerms != null ? S().quoteTerms : DEF_QT, status: "Draft"}};
+  const d = DR.d; if (!d.pos) d.pos = (P(d.partyId) || {}).state || S().state;
+  d.lines.forEach(l => { if (l.dm !== "amt") { l.disc = r2(num(l.qty) * num(l.rate) * num(l.disc) / 100); l.dm = "amt"; } });
+  const body = `<div class="grid">
+   ${fld("Quotation No.", `<input id="f_no" value="${esc(d.no)}" oninput="DR.d.no=this.value">`)}
+   ${fld("Date", `<input type="date" id="f_date" value="${d.date}" oninput="DR.d.date=this.value">`)}
+   ${partyFld("Customer", `<select id="f_party" onchange="docParty(this.value)">${opts(db.parties.map(p => [p.id, p.name]), d.partyId)}</select>`, "f_party")}
+   ${fld("Place of Supply", `<select id="f_pos" onchange="DR.d.pos=this.value;updTot()">${opts(STATES, d.pos)}</select>`)}
+   ${fld("Valid till", `<input type="date" id="f_valid" value="${d.validTill || ""}" oninput="DR.d.validTill=this.value">`)}
+   ${fld("Status", `<select onchange="DR.d.status=this.value">${opts(QSTAT.filter(x => x !== "Expired"), d.status === "Expired" ? "Sent" : d.status)}</select>`)}
+  </div>
+  <div class="lines tw" style="margin-top:16px"><table><thead><tr>${heads(["Item", "Description", "HSN/SAC", "Qty", "Rate (excl. GST)", "Disc (₹)", "GST %", ["Amount", "r"], ""])}</tr></thead><tbody id="lb"></tbody></table></div>
+  <div style="margin-top:8px">${btn("+ Add line", "addLine()")}</div>
+  <div class="grid" style="margin-top:14px">${fld("Notes (shown on quotation)", `<textarea oninput="DR.d.notes=this.value">${esc(d.notes)}</textarea>`, "full")}${fld("Terms", `<textarea rows="3" oninput="DR.d.terms=this.value">${esc(d.terms || "")}</textarea>`, "full")}</div>
+  <div class="tot" id="tot"></div>
+  <p class="note" style="margin-top:10px">A quotation is only an offer — it is not added to sales, GST reports, outstanding or the books.</p>`;
+  openModal((ex ? "Edit " : "New ") + "Quotation", body, "Save", saveQuote);
+  drawLines(); updTot();
+}
+function saveQuote() {
+  const d = DR.d;
+  if (!d.partyId) return toast("Select a customer");
+  if (!d.no.trim()) return toast("Enter a number");
+  d.lines = d.lines.filter(l => num(l.qty) * num(l.rate) > 0);
+  if (!d.lines.length) return toast("Add at least one line with qty and rate");
+  if (db.quotes.some(x => x.no === d.no && x.id !== d.id)) return toast("That number already exists");
+  if (!d.by && CU) d.by = CU.name;
+  const i = db.quotes.findIndex(x => x.id === d.id);
+  if (i >= 0) db.quotes[i] = d; else db.quotes.push(d);
+  save(); closeModal(); render(); toast("Quotation saved");
+}
+function qSet(id, v) { const d = db.quotes.find(x => x.id === id); if (!d || !ck("sales", 2)) return render(); d.status = v; save(); render(); }
+function delQuote(id) { if (!ck("sales", 3)) return; if (!confirm("Delete this quotation permanently?")) return; db.quotes = db.quotes.filter(x => x.id !== id); save(); render(); }
+PAGES.quotes = () => {
+  const [a, b] = fyRange(), all = db.quotes.filter(d => inR(d.date, a, b)), tot = d => docCalc(d).total;
+  CUR = () => all.slice().sort((x, y) => y.date.localeCompare(x.date) || y.no.localeCompare(x.no))
+    .filter(d => (!Q.party || d.partyId === Q.party) && (!Q.st || qStat(d) === Q.st) && match(d.no, pname(d.partyId)))
+    .map(d => { const c = docCalc(d), st = qStat(d); return `<tr><td><b>${esc(d.no)}</b>${byTag(d)}</td><td>${fdate(d.date)}</td><td>${esc(pname(d.partyId))}</td><td>${d.validTill ? fdate(d.validTill) : "—"}</td><td class="r">${inr(c.taxable)}</td><td class="r"><b>${inr(c.total)}</b></td><td><select style="min-width:104px" onchange="qSet('${d.id}',this.value)">${opts(QSTAT, st)}</select></td><td class="act"><a onclick="viewDoc('quotes','${d.id}')">Open</a><a class="ed" onclick="quoteForm('${d.id}')">Edit</a><a class="del" onclick="delQuote('${d.id}')">Delete</a></td></tr>`; }).join("");
+  const open = all.filter(d => ["Draft", "Sent"].includes(qStat(d))), acc = all.filter(d => qStat(d) === "Accepted");
+  return {
+    title: "Quotations", sub: "Send price quotes to customers. They don't affect sales, GST or your books.",
+    actions: btn("+ New Quotation", "quoteForm()", true),
+    body: `<div class="stats">${statCard("Quotations", all.length)}${statCard("Open (draft / sent)", inr(sum(open, tot)), open.length + " quotes")}${statCard("Accepted", inr(sum(acc, tot)), acc.length + " quotes")}${statCard("Expired / rejected", all.filter(d => ["Expired", "Rejected"].includes(qStat(d))).length)}</div>` +
+      listPanel(["No.", "Date", "Customer", "Valid till", ["Taxable", "r"], ["Total", "r"], "Status", ""], partyFilter() + `<select onchange="Q.st=this.value;refreshRows()"><option value="">Any status</option>${QSTAT.map(x => `<option ${Q.st === x ? "selected" : ""}>${x}</option>`).join("")}</select>`, "Search by number or customer…")
+  };
+};
 function tplPanel() {
   const s = S(), box = (l, id, v) => fld(l, `<textarea id="${id}" rows="8">${esc(v)}</textarea>`, "full");
-  return `<div class="panel"><h3>WhatsApp message templates</h3><p class="note" style="margin-bottom:14px">Used when you send an invoice, receipt or payment voucher as a PDF. You can still edit the message before sending. Placeholders: {party} {business} {no} {date} {amount} {mode} {balance} {phone} {upi}</p><div class="grid">${box("Invoice message", "s_ti", s.tplInvoice || DEF_TPL.invoice)}${box("Receipt message", "s_tr", s.tplReceipt || DEF_TPL.receipt)}${box("Payment voucher message", "s_tp", s.tplPayment || DEF_TPL.payment)}${box("Payment reminder message", "s_trm", s.tplReminder || DEF_TPL.reminder)}</div></div>`;
+  return `<div class="panel"><h3>WhatsApp message templates</h3><p class="note" style="margin-bottom:14px">Used when you send an invoice, receipt or payment voucher as a PDF. You can still edit the message before sending. Placeholders: {party} {business} {no} {date} {amount} {mode} {balance} {phone} {upi} {valid}</p><div class="grid">${box("Invoice message", "s_ti", s.tplInvoice || DEF_TPL.invoice)}${box("Quotation message", "s_tq", s.tplQuote || DEF_TPL.quote)}${box("Receipt message", "s_tr", s.tplReceipt || DEF_TPL.receipt)}${box("Payment voucher message", "s_tp", s.tplPayment || DEF_TPL.payment)}${box("Payment reminder message", "s_trm", s.tplReminder || DEF_TPL.reminder)}</div></div>`;
 }
 
 /* ---- Receipts & Payments ---- */
@@ -924,7 +1006,7 @@ function partyForm(id) {
 }
 function delParty(id) {
   if (!ck("parties", 3)) return;
-  const used = [...db.sales, ...db.purchases, ...db.receipts, ...db.payments].some(x => x.partyId === id);
+  const used = [...db.sales, ...db.purchases, ...db.receipts, ...db.payments, ...db.quotes].some(x => x.partyId === id);
   if (used) return toast("This party has transactions and can't be deleted");
   if (confirm("Delete this party?")) { db.parties = db.parties.filter(p => p.id !== id); save(); render(); }
 }
@@ -1208,12 +1290,12 @@ PAGES.settings = () => {
     title: "Settings", sub: "Business details printed on every invoice", noFy: true, actions: btn("Save settings", "saveSettings()", true),
     body: `<div class="panel"><h3>Business</h3><div class="grid">${fld("Business name", `<input id="s_biz" value="${esc(s.bizName)}">`)}${fld("GSTIN", `<input id="s_gstin" value="${esc(s.gstin)}" style="text-transform:uppercase">`)}${fld("PAN", `<input id="s_pan" value="${esc(s.pan)}">`)}${fld("State (for CGST/SGST vs IGST)", `<select id="s_state">${opts(STATES, s.state)}</select>`)}${fld("Phone", `<input id="s_phone" value="${esc(s.phone)}">`)}${fld("Email", `<input id="s_email" value="${esc(s.email)}">`)}${fld("Address", `<textarea id="s_addr">${esc(s.address)}</textarea>`, "full")}${fld("App theme", `<select id="s_theme">${opts([["blood", "Blood Moon (red & black)"], ["classic", "Classic dark"]], s.theme === "classic" ? "classic" : "blood")}</select>`)}${fld("Invoice logo", `<div style="background:#0d0d10;border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><img id="logoPrev" src="${s.logo === "none" ? "" : (s.logo || DEF_LOGO)}" style="height:44px;width:auto;${s.logo === "none" ? "display:none" : ""}"><input type="file" accept="image/*" onchange="logoPick(this)" style="max-width:240px"><a class="btn" onclick="logoReset()">Use default</a><a class="btn" onclick="logoReset('none')">Remove</a></div><p class="note" style="margin-top:6px">Shown on invoices, bills and receipts. Use a logo that looks good on a dark red background (white or transparent).</p>`, "full")}</div></div>
     <div class="panel"><h3>Bank & terms</h3><div class="grid">${fld("Bank name", `<input id="s_bank" value="${esc(s.bank)}">`)}${fld("Account number", `<input id="s_acc" value="${esc(s.acc)}">`)}${fld("IFSC", `<input id="s_ifsc" value="${esc(s.ifsc)}">`)}${fld("UPI ID", `<input id="s_upi" value="${esc(s.upi)}">`)}${fld("Invoice terms", `<textarea id="s_terms">${esc(s.terms)}</textarea>`, "full")}</div></div>
-    <div class="panel"><h3>Accounts</h3><div class="grid">${fld("Sales prefix", `<input id="s_sp" value="${esc(s.salePrefix)}">`)}${fld("Purchase prefix", `<input id="s_pp" value="${esc(s.purchPrefix)}">`)}${fld("Non-filing sales prefix", `<input id="s_nfs" value="${esc(s.nfSalePrefix || "NF")}">`)}${fld("Non-filing purchase prefix", `<input id="s_nfp" value="${esc(s.nfPurchPrefix || "NFP")}">`)}${fld("Opening cash & bank balance (₹)", `<input type="number" step="any" id="s_oc" value="${s.openingCash}">`)}${fld("…of which held in bank/UPI (₹)", `<input type="number" step="any" id="s_ob" value="${s.openingBank || 0}">`)}${fld("UPI QR on unpaid invoices", `<select id="s_qr">${opts([["yes", "Show (needs UPI ID above)"], ["no", "Hide"]], s.qrOn === false ? "no" : "yes")}</select>`)}${fld("Lock PIN (leave empty for none)", `<input type="password" id="s_pin" value="${esc(s.pin)}" maxlength="8" autocomplete="new-password">`)}</div><p class="note" style="margin-top:12px">The PIN only hides the screen on a shared computer — it is not encryption.</p></div>${usersPanel()}${tplPanel()}${ghPanel()}`
+    <div class="panel"><h3>Accounts</h3><div class="grid">${fld("Sales prefix", `<input id="s_sp" value="${esc(s.salePrefix)}">`)}${fld("Purchase prefix", `<input id="s_pp" value="${esc(s.purchPrefix)}">`)}${fld("Quotation prefix", `<input id="s_qp" value="${esc(s.quotePrefix || "QTN")}">`)}${fld("Quotation validity (days)", `<input type="number" id="s_qd" value="${s.quoteDays || 15}">`)}${fld("Quotation terms (printed on every quotation)", `<textarea id="s_qt" rows="3">${esc(s.quoteTerms != null ? s.quoteTerms : DEF_QT)}</textarea>`, "full")}${fld("Non-filing sales prefix", `<input id="s_nfs" value="${esc(s.nfSalePrefix || "NF")}">`)}${fld("Non-filing purchase prefix", `<input id="s_nfp" value="${esc(s.nfPurchPrefix || "NFP")}">`)}${fld("Opening cash & bank balance (₹)", `<input type="number" step="any" id="s_oc" value="${s.openingCash}">`)}${fld("…of which held in bank/UPI (₹)", `<input type="number" step="any" id="s_ob" value="${s.openingBank || 0}">`)}${fld("UPI QR on unpaid invoices", `<select id="s_qr">${opts([["yes", "Show (needs UPI ID above)"], ["no", "Hide"]], s.qrOn === false ? "no" : "yes")}</select>`)}${fld("Lock PIN (leave empty for none)", `<input type="password" id="s_pin" value="${esc(s.pin)}" maxlength="8" autocomplete="new-password">`)}</div><p class="note" style="margin-top:12px">The PIN only hides the screen on a shared computer — it is not encryption.</p></div>${usersPanel()}${tplPanel()}${ghPanel()}`
   };
 };
 function saveSettings() {
   if (!ck("__owner", 1)) return;
-  Object.assign(S(), {bizName: val("s_biz") || CLIENT_NAME, gstin: val("s_gstin").toUpperCase(), pan: val("s_pan").toUpperCase(), state: val("s_state"), phone: val("s_phone"), email: val("s_email"), address: val("s_addr"), bank: val("s_bank"), acc: val("s_acc"), ifsc: val("s_ifsc"), upi: val("s_upi"), terms: val("s_terms"), salePrefix: val("s_sp") || "INV", purchPrefix: val("s_pp") || "PUR", nfSalePrefix: val("s_nfs") || "NF", nfPurchPrefix: val("s_nfp") || "NFP", openingCash: num(val("s_oc")), pin: val("s_pin"), tplInvoice: val("s_ti"), tplReceipt: val("s_tr"), tplPayment: val("s_tp"), tplReminder: val("s_trm"), openingBank: num(val("s_ob")), qrOn: val("s_qr") !== "no", theme: val("s_theme") === "classic" ? "classic" : "blood"});
+  Object.assign(S(), {bizName: val("s_biz") || CLIENT_NAME, gstin: val("s_gstin").toUpperCase(), pan: val("s_pan").toUpperCase(), state: val("s_state"), phone: val("s_phone"), email: val("s_email"), address: val("s_addr"), bank: val("s_bank"), acc: val("s_acc"), ifsc: val("s_ifsc"), upi: val("s_upi"), terms: val("s_terms"), salePrefix: val("s_sp") || "INV", purchPrefix: val("s_pp") || "PUR", nfSalePrefix: val("s_nfs") || "NF", nfPurchPrefix: val("s_nfp") || "NFP", openingCash: num(val("s_oc")), pin: val("s_pin"), tplInvoice: val("s_ti"), tplQuote: val("s_tq"), quotePrefix: val("s_qp") || "QTN", quoteDays: num(val("s_qd")) || 15, quoteTerms: ($("s_qt") || {}).value || "", tplReceipt: val("s_tr"), tplPayment: val("s_tp"), tplReminder: val("s_trm"), openingBank: num(val("s_ob")), qrOn: val("s_qr") !== "no", theme: val("s_theme") === "classic" ? "classic" : "blood"});
   save(); render(); toast("Settings saved");
 }
 
@@ -1258,7 +1340,7 @@ async function ghGet() {
 function applyRemote(g) {
   db = Object.assign(defaults(), g.data); GH.sha = g.sha; GH.pending = false; GH.store();
   try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { mem = JSON.stringify(db); }
-  db.users = db.users || []; bankInit(); render(); if (db.users.length) ensureLogin(); ghStatus("Synced ✓ " + clock());
+  db.users = db.users || []; db.quotes = db.quotes || []; bankInit(); render(); if (db.users.length) ensureLogin(); ghStatus("Synced ✓ " + clock());
 }
 function queueSync() {
   if (!GH.on()) return;
@@ -1337,7 +1419,7 @@ window.addEventListener("beforeunload", e => { if (GH.on() && GH.pending) { e.pr
 /* ============================================================
    v9 extras: payment status, ageing, QR, low stock, cash book, users
    ============================================================ */
-db.users = db.users || [];
+db.users = db.users || []; db.quotes = db.quotes || [];
 
 /* ---- sha-256 (sync, for PIN hashes) ---- */
 const sha256 = (() => {
@@ -1371,7 +1453,7 @@ const hashPin = (id, pin) => sha256("krn|" + id + "|" + pin);
 /* ---- roles & permissions ---- */
 const MODS = [["dashboard", "Dashboard"], ["sales", "Sales invoices"], ["purchases", "Purchase bills"], ["receipts", "Receipts"], ["payments", "Payments"], ["entries", "Expenses & Others"], ["parties", "Parties"], ["items", "Items"], ["outstanding", "Outstanding & Ageing"], ["cashbook", "Cash Book"], ["gst", "GST Reports"], ["reports", "Profit & Loss / Balance Sheet"], ["backup", "Import / Backup"]];
 const LVL = ["No access", "View only", "Add & edit", "Add, edit & delete"];
-const PM = {dashboard: "dashboard", sales: "sales", purchases: "purchases", receipts: "receipts", payments: "payments", entries: "entries", parties: "parties", items: "items", outstanding: "outstanding", cashbook: "cashbook", gst: "gst", pnl: "reports", bs: "reports", backup: "backup", settings: "__owner"};
+const PM = {dashboard: "dashboard", quotes: "sales", sales: "sales", purchases: "purchases", receipts: "receipts", payments: "payments", entries: "entries", parties: "parties", items: "items", outstanding: "outstanding", cashbook: "cashbook", gst: "gst", pnl: "reports", bs: "reports", backup: "backup", settings: "__owner"};
 const PRESETS = {
   staff: {dashboard: 0, sales: 2, purchases: 0, receipts: 2, payments: 0, entries: 0, parties: 2, items: 1, outstanding: 1, cashbook: 0, gst: 0, reports: 0, backup: 0},
   accountant: {dashboard: 1, sales: 3, purchases: 3, receipts: 3, payments: 3, entries: 3, parties: 3, items: 3, outstanding: 1, cashbook: 1, gst: 1, reports: 1, backup: 1},
@@ -1398,7 +1480,7 @@ function firstPage() { const all = NAV.flatMap(g => g[1].map(x => x[0])); return
 function pageLv() { if (!multi()) return 3; if (CU && CU.owner) return 3; const m = PM[page]; return m && m !== "__owner" && CU ? ((CU.perms || {})[m] || 0) : 0; }
 function actionsOk() {
   if (["sales", "purchases", "receipts", "payments", "entries", "parties", "items"].includes(page)) return can(page, 2);
-  if (page === "dashboard") return can("sales", 2);
+  if (page === "dashboard" || page === "quotes") return can("sales", 2);
   return true;
 }
 const byTag = d => multi() && d.by ? `<small>by ${esc(d.by)}</small>` : "";
@@ -2055,6 +2137,7 @@ function navBadge(k) {
   try {
     if (k === "bankrec") n = BK().lines.filter(l => bkSt(l) !== "cleared").length;
     else if (k === "items") n = lowItems().length;
+    else if (k === "quotes") n = db.quotes.filter(d => qStat(d) === "Sent").length;
     else if (k === "outstanding") { const o = r2(sum(ageRows("recv"), r => r.b[1] + r.b[2] + r.b[3])); if (o > 0.5) return `<span class="bd bad" title="Overdue more than 30 days">${cmpInr(o)}</span>`; }
   } catch (e) {}
   return n ? `<span class="bd">${n}</span>` : "";
@@ -2062,7 +2145,7 @@ function navBadge(k) {
 function navTog(g) { NAVC[g] = !NAVC[g]; try { localStorage.setItem(KEY + "_nav", JSON.stringify(NAVC)); } catch (e) {} $("nav").innerHTML = navHtml(); }
 let NEWIT = [];
 function newMenu() {
-  NEWIT = [["Sales invoice", "sales", () => docForm("sales")], ["Purchase bill", "purchases", () => docForm("purchases")], ["Receipt", "receipts", () => vouchForm("receipts")], ["Payment", "payments", () => vouchForm("payments")], ["Expense / other entry", "entries", () => entryForm()], ["Import bank statement", "bankrec", () => { setPage("bankrec"); bankImport(); }]].filter(x => can(x[1], 2));
+  NEWIT = [["Sales invoice", "sales", () => docForm("sales")], ["Quotation", "sales", () => quoteForm()], ["Purchase bill", "purchases", () => docForm("purchases")], ["Receipt", "receipts", () => vouchForm("receipts")], ["Payment", "payments", () => vouchForm("payments")], ["Expense / other entry", "entries", () => entryForm()], ["Import bank statement", "bankrec", () => { setPage("bankrec"); bankImport(); }]].filter(x => can(x[1], 2));
   return NEWIT.length ? `<div class="nw"><button class="btn" onclick="newTog(event)">+ New ▾</button><div class="nm" id="newm">${NEWIT.map((x, i) => `<a onclick="newGo(${i})">${x[0]}</a>`).join("")}</div></div>` : "";
 }
 function newTog(e) { e.stopPropagation(); $("newm").classList.toggle("show"); }
